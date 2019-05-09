@@ -4,11 +4,12 @@ from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 from multiprocessing.dummy import Pool
 
-array = np.random.random(size=(10, 20, 30))
-empty = np.ones(array[0].shape)
+shape = (30, 2, 10)
+array = np.random.random(shape)
 
 fig = plt.figure()
-func = lambda i: plt.imshow(array[i])
-frames = len(array)
-ani = FuncAnimation(fig, func, frames)
+func = lambda i: plt.plot(array[i,0], array[i,1], '.', color='k')
+frames = shape[0]
+init_func = lambda : None
+ani = FuncAnimation(fig, func, frames, init_func)
 plt.show()

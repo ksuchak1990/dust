@@ -1,0 +1,55 @@
+- - - Upgrade/Transfer - - -
+	1st Draft:   July
+	Draft:       12th Aug
+	Submission:  19th Aug
+	Meeting:     26th Aug
+
+
+Lit Review:
+	Complexity Theory
+	Machine Learning
+	- Thesis
+	- Why DA is different to ML
+	Be clear about what isn't explored
+
+Tech Report:
+	ABM Evaluation
+	Distros in detail
+	Explore Model - Parametric Study for all params
+	Redo Inflow/Outflow
+	get_ani() -> FuncAnimation
+	wiggles -> route deviations
+	Analytic numbers are good, but explain why using those and the choose a final equation - r-sq is bad
+
+Next Meeting:
+	Aim
+	- Reader knows nothing
+	- Concise (lots of refs)
+	- Read with notes
+	- why / so what / what next
+
+	Schedule
+	- read*2, note, write, code
+
+	Structure  (50 pages)
+	- Lit Review  (Critical Evaluation)
+	-- ABM
+	--- Pick out things that will be relevant  (Scheduler)
+	---
+	--- Intro & Relevant Features
+	--- Critical of ODD ?
+	--- Calibration  (Simulated Annealing / Genetic Algorithms)  what they are, examples of what people have done
+	--- Type of Models  (Markovian - WHIPP & Keiran's refs)
+	--- Definitions  (Var, Param, State)
+	-- DA
+	--- Model, Data uncertainty and combining - data papers / books
+	--- Methods (paragraph each), strengths and weaknesses (table)
+	--- PF (lit review), what people have done, what is cutting edge.  Highlight gaps in this lit review
+	--- Diff with ML
+	-- DA+ABM
+	--- who is doing this?  what are they doing?  well/badly?  where are the gaps?
+	- Tech Report
+	-- Model Eval
+	-- PF Eval
+	- Appendix
+	-- Applications (as ideas for Case Study)

@@ -198,7 +198,6 @@ class Model:
     def __init__(self, params):
         """
         Create a new model, reading parameters from a dictionary.
-        XXXX Need to document the required parameters.
         """
         self.params = params
         # There are a lot of required attributes here that we hope are in params
@@ -395,7 +394,7 @@ class Model:
             'pop_total': 100,
             'entrances': 3,
             'entrance_space': 2,
-            'entrance_speed': 1,
+            'entrance_speed': 4,
             'exits': 2,
             'exit_space': 1,
             'speed_min': .1,
@@ -403,10 +402,10 @@ class Model:
             'speed_desire_std': 1,
             'separation': 4,
             'wiggle': 1,
-            'batch_iterations': 10_000,
-            'do_save': True,
+            'batch_iterations': 500,
+            'do_save': False,
             'do_plot': False,
-            'do_ani': True
+            'do_ani': False
         }
         # Run the model
         Model(model_params).batch()

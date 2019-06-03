@@ -1,28 +1,19 @@
-# Produce a graph where the markersize is scaled with the grid
-
+# A figure where the markersize is scaled to the grid
 import matplotlib.pyplot as plt
 
-width = 40
+width = 45
 height = 20
 
-wid = 4
-hei = wid * height / width
-fig = plt.figure(1, figsize=(wid, hei))
-sp = fig.add_subplot(111)
-sp.set_xlim([0,width])
-sp.set_ylim([0,height])
-plt.axes().set_aspect('equal')
+wid = 8
+hei = wid / width * height
 
-# line is in points: 72 points per inch
-point_hei=hei*72
+scale = 5  # dot radius
+markersize = scale * 3*72 * hei / height  # 72px/in
 
-xval=[5,15,25,35,40]
-yval=[1,2,18,7,18]
-x1,x2,y1,y2 = plt.axis()
+data = ([5,15,25,35,45], [10,5,15,5,10])
 
-markersizescale = 1.5*72 * hei / height
-scale = 1
-
-plt.plot(xval, yval, marker='.', markersize=scale*markersizescale)
-plt.grid('on', which='both')
+fig = plt.figure(figsize=(wid, hei))
+plt.plot(*data, marker='.', markersize=markersize)
+plt.axis([0, width, 0, height], aspect='equal')
+# plt.tight_layout(pad=0)
 plt.show()

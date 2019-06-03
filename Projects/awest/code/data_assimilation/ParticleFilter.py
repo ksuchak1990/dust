@@ -5,30 +5,39 @@ v7.3 (lit)
 '''
 import numpy as np
 import matplotlib.pyplot as plt
-
 from matplotlib.animation import FuncAnimation
 from copy import deepcopy
-from multiprocessing.dummy import Pool
+import multiprocessing.dummy
+__spec__ = None
+Pool = multiprocessing.dummy.Pool()
 np.random.seed(39)
+
+
+
 
 
 class ParticleFilter:
 
-	def __init__(self, model0, particles=10, window=1, do_copies=True, do_save=False, do_noise=False, do_paral=True):
+	def __init__(self, model0, **kwargs):
 		self.time = 0
 		# Params
-		self.window = window
-		self.particles = particles
+		params = {
+			'particles': 10,
+			'window': 1,
+			'do_copies': True,
+			'do_save': False,
+			'do_noise': False,
+			'do_paral': True
+			}
+		params, self.params = self.update_dict(params, kwargs)
+		[setattr(self, key, value) for key, value in params.items()]
 		# Model
 		self.models = [deepcopy(model0) for _ in range(self.particles)]
-		if not do_copies:
+		if not self.do_copies:
 			[model.__init__(model0.params) for model in self.models]
 		for unique_id in range(self.particles):
 			self.models[unique_id].unique_id = unique_id
 		# Save
-		self.do_save = do_save
-		self.do_noise = do_noise
-		self.do_paral = do_paral
 		if self.do_save:
 			self.active = []
 			self.mean = []
@@ -36,6 +45,18 @@ class ParticleFilter:
 			self.err = []
 			self.resampled = []
 		return
+
+	def update_dict(dict0, dict1):
+		dict2 = dict()
+		for key, value in dict1.items():
+			if key in dict0:
+				if dict0[key] is not dict1[key]:
+					dict0[key] = dict1[key]
+					if 'do_' not in key:
+						dict2[key] = dict1[key]
+			else:
+				print(f'BadKeyWarning: {key} is not a filter parameter.')
+		return dict0, dict2
 
 	def step(self, state_obs):
 		self.time += self.window
@@ -49,7 +70,7 @@ class ParticleFilter:
 	def predict(self, states):
 		[self.models[i].set_state(states[i]) for i in range(self.particles)]
 		if self.do_paral:
-			Pool().map(lambda model: [model.step() for _ in range(self.window)], self.models)
+			Pool.map(lambda model: [model.step() for _ in range(self.window)], self.models)
 		else:
 			[map(lambda model: [model.step() for _ in range(self.window)], self.models)]
 		states = np.array([model.get_state() for model in self.models])
@@ -169,15 +190,14 @@ class ParticleFilter:
 			print('Warning - Cannot do_plot as do_save is: ', self.do_save)
 		return
 
-	def ani(self, model0, agents=None):
+	def get_ani(self, model0, agents=None):
 		if self.time%10 is 0:
 			plt.clf()
 			fig = plt.figure(1)
-			[model.ani(agents=agents, colour='r', alpha=.3) for model in self.models]
-			model0.ani(agents=None,   colour='b', alpha=.6)
-			model0.ani(agents=agents, show_separation=True)
+			[model.get_ani(agents=agents, colour='r', alpha=.3) for model in self.models]
+			model0.get_ani(agents=None,   colour='b', alpha=.6)
+			model0.get_ani(agents=agents, show_separation=True)
 			plt.pause(1/4)
-			# plt.savefig('./data/run2/sspmm_pf_{}.png'.format(self.time))
 		return
 
 	def batch(self, model0, iterations=None, do_ani=False, agents=None):
@@ -187,15 +207,14 @@ class ParticleFilter:
 			[model0.step() for _ in range(self.window)]
 			state_obs = model0.get_state()
 			self.step(state_obs)
-			if do_ani:
-				self.ani(model0, agents)
 		if self.do_save:
 			self.plot()
+			if do_ani: self.get_ani(model0, agents)
 			# self.file()
 		return
 
 if __name__ == '__main__':
 	from sspmm import Model
-	model = Model({'pop_total':10})
-	pf = ParticleFilter(model, particles=20, window=10, do_copies=False, do_save=True, do_noise=False, do_paral=True)
-	pf.batch(model, iterations=10, do_ani=True, agents=1)
+	model = Model()#{'pop_total':10})
+	pf = ParticleFilter(model, particles=200, window=10, do_copies=False, do_save=True, do_noise=False, do_paral=True)
+	pf.batch(model, iterations=1800, do_ani=True, agents=1)

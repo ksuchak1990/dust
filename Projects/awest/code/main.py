@@ -14,10 +14,10 @@ if 0:  # screensaver
 if 1:  # sspmm
 
 	from models.sspmm import Model
-	model = Model({'iterations': 200})
+	model = Model()
 
-	if 1:  # Test Model
+	if 0:  # Test Model
 		model.batch()
-	elif 0:  # Test PF
-		pf = ParticleFilter(model, particles=10, window=1, do_copies=False, do_save=False)
-		pf.batch(model, iterations=100, do_ani=True, agents=5)
+	else:  # Test PF
+		pf = ParticleFilter(model, particles=100, window=10, do_copies=False, do_save=True)
+		pf.batch(model, do_ani=True, agents=1)

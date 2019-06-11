@@ -1,24 +1,25 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-StationSim
-Created on Tue Nov 20 15:25:27 2018
-@author: medkmin
+Created on Thu May  9 10:48:07 2019
+
+@author: rob
 """
-
-# sspmm.py
-'''
-StationSim (aka Mike's model) converted into python.
-'''
-# Note cm (classmethods): Class Methods seem to have caused an issue.. Is so we can take these methods outside the class (excluding __init__).  This will reduce reproducing methods in the PF.
+"""
+KM's StationSim slightly modified for UKF.
 
 
-#%% INIT
+Rob's Additions:
+    -ideal_location for the transition step (definitely need this)
+    -wiggle counters (at nick's request)
+"""
 import numpy as np
 from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
+import datetime
+
 sqrt2 = np.sqrt(2)  # required for Agent.lerp()
 
-#%% MODEL
 class Agent:
     """
     A class representing a generic agent for the StationSim ABM.
@@ -26,12 +27,10 @@ class Agent:
     def __init__(self, model, unique_id):
         """
         Initialise a new agent.
-
         Creates a new agent and gives it a randomly chosen entrance, exit, and
         desired speed. All agents start with active state 0 ('not started').
         Their initial location (** HOW IS LOCATION REPRESENTED?? Answer: With (x,y) tuple-floats **) is set
         to the location of the entrance that they are assigned to.
-
         :param model: a pointer to the station sim model that is creating this agent
         """
         # Required
@@ -40,21 +39,18 @@ class Agent:
         model.pop_active += 1
 
         # Choose at random at which of the entrances the agent starts
-        self.location = model.loc_entrances[np.random.randint(model.entrances)]
-        self.location[1] += model.entrance_space * (np.random.uniform() - .5)
-        self.loc_desire = model.loc_exits[np.random.randint(model.exits)]
-
-        # Parameters
-        # model.entrance_speed -> the rate at which agents enter
-        # self.time_activate -> the time at which the agent should become active
-        # time_activate is exponentially distributed based on entrance_speed
-        self.time_activate = np.random.exponential(model.entrance_speed)
+        self.location = model.loc_entrances[np.random.randint(model.entrances)] #pick an entrance
+        self.location[1] += model.entrance_space * (np.random.uniform() - .5) #wiggle between +-1 a bit about the entrance
+        self.loc_desire = model.loc_exits[np.random.randint(model.exits)] #pick an exit
+        self.ideal_location = self.location #Rob's addition. Where it would be without collisions. Useful prior prediction for each agent
+        self.time_activate = np.random.exponential(model.entrance_speed) #when do agents enter model
         # The maximum speed that this agent can travel at:
         # self.speed_desire = max(np.random.normal(model.speed_desire_mean, model.speed_desire_std), 2*model.speed_min)  # this is not a truncated normal distribution
         self.speed_desire = model.speed_min - 1
         while self.speed_desire <= model.speed_min:
             self.speed_desire = np.random.normal(model.speed_desire_mean, model.speed_desire_std)
         self.wiggle = min(self.speed_desire, model.wiggle)  # if they can wiggle faster than they can move they may beat the expected time
+        self.wiggle_count = 0 #how many wiggles per agent per run
         # A few speeds to check; used if a step at the max speed would cause a collision
         self.speeds = np.arange(self.speed_desire, model.speed_min, -model.speed_step)
         if model.do_save:
@@ -74,6 +70,7 @@ class Agent:
             self.move(model)
             self.exit_query(model)
             self.save(model)
+  
 
     def activate(self, model):
         """
@@ -101,15 +98,20 @@ class Agent:
         and smaller distances until they find one that they can travel to
         without causing a colision with another agent.
         """
+        
+        
         for speed in self.speeds:
             # Direct
             new_location = Agent.lerp(self.loc_desire, self.location, speed)
+            if speed == self.speed_desire:
+                self.ideal_location = new_location
+
             if not Agent.collision(model, new_location):
                 break
             elif speed == self.speeds[-1]:
                 # Wiggle
-                # Why 1+1? Answer: randint(1)=0, randint(2)=0 or 1 - i think it is the standard pythonic idea of up to that number like array[0:2] is elements (array[0],array[1])
                 new_location = self.location + self.wiggle*np.random.randint(-1, 1+1, 2)
+                self.wiggle_count+=1 #rob's addition adds 1 to the wiggle counter
         # Rebound
         if not self.is_within_bounds(model.boundaries, new_location):
             new_location = np.clip(new_location, model.boundaries[0], model.boundaries[1])
@@ -135,7 +137,6 @@ class Agent:
     def neighbourhood(cls, model, new_location):
         """
         XXXX WHAT DOES THIS DO??  Answer: This method finds whether or not nearby neighbours are a collision.
-
          :param model:        the model that this agent is part of
          :param new_location: the proposed new location that the agent will move to
                          (a XXXX - what kind of object/data is the location?  Answer: the standard (x,y) floats-tuple)
@@ -392,7 +393,7 @@ class Model:
         model_params = {
             'width': 200,
             'height': 100,
-            'pop_total': 100,
+            'pop_total': 300,
             'entrances': 3,
             'entrance_space': 2,
             'entrance_speed': 1,
@@ -405,8 +406,8 @@ class Model:
             'wiggle': 1,
             'batch_iterations': 10_000,
             'do_save': True,
-            'do_plot': False,
-            'do_ani': True
+            'do_plot': True,
+            'do_ani': False
         }
         # Run the model
         Model(model_params).batch()
@@ -414,4 +415,6 @@ class Model:
 
 # If this is called from the command line then run a default model.
 if __name__ == '__main__':
+    
+    
     Model.run_defaultmodel()

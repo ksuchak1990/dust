@@ -217,11 +217,14 @@ class ParticleFilter:
         #for i, a in enumerate(zip([x[1] for x in zip(self.before_resample, self.mean_errors) if x[0] == True],
         #                          [x[1] for x in zip(self.before_resample, self.mean_errors) if x[0] == False])):
         #    print("{} - before: {}, after: {}".format(i, a[0], a[1]))
-
-
-        return min(self.mean_errors), max(self.mean_errors), np.average(self.mean_errors), \
+        
+        if not self.mean_errors == []:
+            return min(self.mean_errors), max(self.mean_errors), np.average(self.mean_errors), \
+               min(self.absolute_errors), max(self.absolute_errors), np.average(self.absolute_errors), \
                min(self.variances),   max(self.variances),   np.average(self.variances)
-
+        else:
+            return 
+       
     
     def predict(self, numiter=1):
         '''
@@ -337,6 +340,8 @@ class ParticleFilter:
             self.mean_errors.append(np.linalg.norm(mean - truth_state[active_states], axis=0))
             self.absolute_errors.append(np.linalg.norm(unweighted_mean - truth_state[active_states], axis=0))
         
+            # min(mean_errors) is returning empty. CHeck small values for agents/particles
+        
         return
     
     def p_save(self):
@@ -415,51 +420,53 @@ class ParticleFilter:
 
 
 def single_run_particle_numbers():
-
-    runs = 5
-    filter_params = {
-        'number_of_particles': 50,
-        'resample_window': 100,
-        'multi_step' : True, # Whether to predict() repeatedly until the sampling window is reached
-        'agents_to_visualise': 1,
-        'particle_std':1.5,
-        'model_std': 1.0,
-        'do_save': True,
-        'plot_save': False,
-        'do_ani': False,
-    }
-
-    # Open a file to write the results to
-    outfile = "results/pf"+str(int(time.time()*1000))+".csv"
-    with open(outfile, 'w') as f:
-        # Write the parameters first
-        f.write("PF params: "+str(filter_params)+"\n")
-        f.write("Model params: "+str(model_params)+"\n")
-        # Now write the csv headers
-        f.write("Min_Mean_errors,Max_Mean_errors,Average_mean_errors,Min_variances,Max_variances,Average_variances\n")
-
-    print("Running filter with {} particles and {} runs (on {} cores) with {} agents. Saving files to: {}".format(
-        filter_params['number_of_particles'], runs, numcores, model_params["pop_total"], outfile), flush=True)
-    print("PF params: "+str(filter_params)+"\n")
-    print("Model params: "+str(model_params)+"\n")
-
-
-
-    for i in range(runs):
-
-        # Run the particle filter
-        start_time = time.time() # Time how long the whole run takes
-        pf = ParticleFilter(Model, model_params, filter_params)
-        result = pf.step()
-
-        # Write the results of this run
-        with open(outfile, 'a') as f:
-            f.write(str(result)[1:-1].replace(" ","")+"\n") # (slice to get rid of the brackets aruond the tuple)
-        print("Run: {}, particles: {}, took: {}(s), result: {}".format(
-            i, filter_params['number_of_particles'], round(time.time()-start_time), result), flush=True)
-
-
-    print("Finished single run")
+    num_par = [10,100]#[10*x+1 for x in range(92,100)]
+    
+    for x in num_par:
+        runs = 10
+        filter_params = {
+            'number_of_particles': x,
+            'resample_window': 100,
+            'multi_step' : True, # Whether to predict() repeatedly until the sampling window is reached
+            'agents_to_visualise': 1,
+            'particle_std':10.0,
+            'model_std': 10.0,
+            'do_save': True,
+            'plot_save': False,
+            'do_ani': False,
+        }
+    
+        # Open a file to write the results to
+        outfile = "plot_results/pf"+str(int(time.time()*1000))+".csv"
+        with open(outfile, 'w') as f:
+            # Write the parameters first
+            f.write("PF params: "+str(filter_params)+"\n")
+            f.write("Model params: "+str(model_params)+"\n")
+            # Now write the csv headers
+            f.write("Min_Mean_errors,Max_Mean_errors,Average_mean_errors,Min_Absolute_errors,Max_Absolute_errors,Average_Absolute_errors,Min_variances,Max_variances,Average_variances\n")
+    
+        print("Running filter with {} particles and {} runs (on {} cores) with {} agents. Saving files to: {}".format(
+            filter_params['number_of_particles'], runs, numcores, model_params["pop_total"], outfile), flush=True)
+        print("PF params: "+str(filter_params)+"\n")
+        print("Model params: "+str(model_params)+"\n")
+    
+    
+    
+        for i in range(runs):
+    
+            # Run the particle filter
+            start_time = time.time() # Time how long the whole run takes
+            pf = ParticleFilter(Model, model_params, filter_params)
+            result = pf.step()
+    
+            # Write the results of this run
+            with open(outfile, 'a') as f:
+                f.write(str(result)[1:-1].replace(" ","")+"\n") # (slice to get rid of the brackets aruond the tuple)
+            print("Run: {}, particles: {}, agents: {}, took: {}(s), result: {}".format(
+                i, filter_params['number_of_particles'], model_params['pop_total'], round(time.time()-start_time), result), flush=True)
+    
+    
+        print("Finished single run")
 
 if __name__ == '__main__':
     __spec__ = None
@@ -471,7 +478,7 @@ if __name__ == '__main__':
     model_params = {
         'width': 200,
         'height': 100,
-        'pop_total': 10,
+        'pop_total': 300,
         'entrances': 3,
         'entrance_space': 2,
         'entrance_speed': .1,

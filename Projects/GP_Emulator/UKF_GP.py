@@ -245,83 +245,29 @@ class UnscentedKalmanFilter(object):
             self.sigmas_f[i] = fx(s, dt, **fx_args)
 			
 #define function fx and hx
-def f_cv_radar(x, dt):
-    """ state transition function for a constant velocity 
-    aircraft"""
-    F = np.array([[1, dt, 0, 0],
-                  [0,  1, 0, 0],
-                  [0,  0, 1, dt],
-                  [0,  0, 0, 1]], dtype=float)
-    return np.dot(F, x)
+def f_x(x, GP):
+    """ state transition function is a pretrained Gaussian Process"""
+    y_pred, y_unc, _ = GP.predict(np.array([x]))
+		    
+    return y_pred, y_unc
     
 
 #measurement function
-def h_radar(x):
-    dx = x[0] - h_radar.radar_pos[0]
-    dy = x[2] - h_radar.radar_pos[1]
-    slant_range = math.sqrt(dx**2 + dy**2)
-    elevation_angle = math.atan2(dy, dx)
-    return [slant_range, elevation_angle]
-#h_radar.radar_pos = (0, 0)
-
-
-class RadarStation(object):
-    
-    def __init__(self, pos, range_std, elev_angle_std):
-        self.pos = np.asarray(pos)       
-        self.range_std = range_std
-        self.elev_angle_std = elev_angle_std
-    
-    def reading_of(self, ac_pos):
-        """ Returns (range, elevation angle) to aircraft. 
-        Elevation angle is in radians.
-        """        
-        diff = np.subtract(ac_pos, self.pos)
-        rng = norm(diff)
-        brg = atan2(diff[1], diff[0])
-        return rng, brg
-
-    def noisy_reading(self, ac_pos):
-        """ Compute range and elevation angle to aircraft with 
-        simulated noise"""        
-        rng, brg = self.reading_of(ac_pos)      
-        rng += np.random.randn() * self.range_std
-        brg += np.random.randn() * self.elev_angle_std 
-        return rng, brg       
-
-class ACSim(object):   #simulation of the aircraft
-    def __init__(self, pos, vel, vel_std):
-        self.pos = np.asarray(pos, dtype=float)
-        self.vel = np.asarray(vel, dtype=float)
-        self.vel_std = vel_std                
-    def update(self, dt):
-        """ Compute and returns next position. Incorporates 
-        random variation in velocity. """        
-        dx = self.vel*dt + (np.random.randn() * self.vel_std) * dt      
-        self.pos += dx     
-        return self.pos
+def h_x(x):
+    return x
 	
-dt = 3
-range_std = 5 #range of radar error 5m
-elevation_angle_std = math.radians(0.5)  #range of slant error 0.5rad
-ac_pos = (0,1000) #initial aircraft position in coordination x,y: 0 in x and 1000m in y
-ac_vel = (100,0)  #initial velocity in coordination x,y: 100m/dt in x and 0 in y
-radar_pos = (0,0) #position of the radar
-h_radar.radar_pos = radar_pos
-
+dt=1
 # Step 1: Find sigma points, follow Van Der Merwe
 points = MerweScaledSigmaPoints(n=4,alpha=.1,beta=2,kappa=1)
-kf = UnscentedKalmanFilter(4,2, dt, fx=f_cv_radar, hx=h_radar, points=points)
+kf = UnscentedKalmanFilter(4,2, dt, fx=f_x, hx=h_x, points=points)
 kf.Q[0:2,0:2]=Q_discrete_white_noise(2,dt=dt,var=0.1)
 kf.Q[2:4,2:4]=Q_discrete_white_noise(2,dt=dt,var=0.1)
-kf.R = np.diag([range_std**2,elevation_angle_std**2])
+#kf.R = np.diag([range_std**2,elevation_angle_std**2])
 kf.x = np.array([0,90,1100,0])
 kf.P = np.diag([300**2,30**2,150**2,3**2])
 
 np.random.seed(200)
 pos=(0,0)
-radar = RadarStation(pos,range_std,elevation_angle_std)
-ac = ACSim(ac_pos, (100,0),0.02)
 
 time = np.arange(0,360+dt,dt)
 xs, ys = [],[]

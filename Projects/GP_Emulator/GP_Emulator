@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jun 12 15:37:32 2019
+
+@author: minhlkieu
+
+This is a Gaussian Process Emulator of an Agent-based model
+
+It needs the Input and Output from an ABM, it then aims to emulate a Step transition 
+function in an ABM
+
+
+"""
+
+import os
+import numpy as np
+import gp_emulator
+#os.chdir("/Users/geomik/Dropbox/Minh_UoL/DA/Emulators")
+#from GaussianProcess import GaussianProcess
+import pickle
+
+#load simulated data
+data = np.genfromtxt('data_emulator.csv', delimiter=',')
+
+#process data to make predictions
+x = data[1:-1,:4]
+y=data[2:,4] 
+
+Threshold = 200
+
+x_train = x[:Threshold,:]
+y_train = y[:Threshold]
+
+x_test = x[Threshold:]
+y_test = y[Threshold:]
+
+#model 1: gp_emulator
+gp1 = gp_emulator.GaussianProcess(x_train,y_train)
+gp1.learn_hyperparameters(n_tries=25)
+#y_pred, y_unc, _ = gp1.predict(x_test,do_unc=True, do_deriv=False)
+
+#model 2: mogp_emulator
+#gp2 = GaussianProcess(x_train,y_train)
+#gp2.learn_hyperparameters(n_tries=25)
+#y_pred, y_unc, _ = gp2.predict(x_test,do_unc=True, do_deriv=False)
+
+# save the model to disk
+filename = 'gp_emulator.sav'
+pickle.dump(gp1, open(filename, 'wb'))
+
+y_pred, y_unc, _ = gp1.predict(np.array([[198.   , 177.   , 757.   ,   1.498]]))
+y_pred

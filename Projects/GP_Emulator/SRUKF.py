@@ -20,7 +20,7 @@ based on
 https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6179312
 """
 import os
-os.chdir("/home/rob/dust/Projects/RC_Scripts/")
+#os.chdir("/home/rob/dust/Projects/RC_Scripts/")
 import numpy as np
 from StationSim_UKF import Model, Agent
 import scipy

@@ -9,10 +9,10 @@ UKF with one state and sampling rate addition
 
 
 import os
-os.chdir("/home/rob/dust/Projects/RC_Scripts/")
+#os.chdir("/home/rob/dust/Projects/RC_Scripts/")
 import numpy as np
 from math import floor
-from StationSim import Model, Agent
+from StationSim_UKF import Model, Agent
 from filterpy.kalman import MerweScaledSigmaPoints as MSSP
 from filterpy.kalman import UnscentedKalmanFilter as UNKF
 from filterpy.common import Q_discrete_white_noise as QDWN

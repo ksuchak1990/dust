@@ -53,14 +53,13 @@ class SRUKF():
     def __init__(self,model_params):
         """this needs to:
             - init x0, S_0,S_v and S_n
-           
-            
+ 		            
         """
         self.model_params = model_params
         self.base_model = Model(self.model_params)
         self.x0 =  Model.agents2state(self.base_model)      
-        self.P = np.eye(2*model_params["pop_total"])*2
-        self.Q = np.eye(2*model_params["pop_total"])
+        self.P = np.eye(2*model_params["pop_total"])*2  #covariance matrix
+        self.Q = np.eye(2*model_params["pop_total"])    #noise matrix
         self.h = 1.7320508 #root 3
         #self.wm = np.zeros(((2*self.x0.shape)+1,1))
         #self.wc = np.zeros(((2*self.x0.shape)+1,1))

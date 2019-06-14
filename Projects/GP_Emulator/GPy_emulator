@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jun 13 15:49:09 2019
+
+@author: minhlkieu
+"""
+import numpy as np
+import GPy
+
+f_output1 = lambda x, y: 4. * np.cos(x/5.) - .4*x - 35. + np.random.rand(x.size)[:,None] * 2. + y  
+f_output2 = lambda x, y: 6. * np.cos(x/5.) + .2*x + 35. + np.random.rand(x.size)[:,None] * 8. + 2*y
+X1 = np.random.rand(100)[:,None]; X1=X1*75
+X2 = np.random.rand(100)[:,None]; X2=X2*70 + 30
+
+X2d = np.array([(X1.T)[0],(X2.T)[0]]).T # Put input data in the form I was expecting to be necessary based on multiple input examples in other tutorials
+
+Y1 = f_output1(X1,X2)
+Y2 = f_output2(X1,X2)
+
+K= GPy.kern.Matern32(input_dim=2) 
+icm = GPy.util.multioutput.ICM(input_dim=2,num_outputs=2,kernel=K)
+m = GPy.models.GPCoregionalizedRegression([X2d,X2d],[Y1,Y2],kernel=icm)
+m['.*Mat32.var'].constrain_fixed(1.) #For this kernel, B.kappa encodes the variance now.
+m.optimize()
+print(m)
+
+newX = np.arange(100,110)[:,None]
+newX = np.hstack([newX,newX,np.ones_like(newX)])
+print(newX)
+noise_dict = {'output_index':newX[:,2:].astype(int)}
+m.predict(newX,Y_metadata=noise_dict)
+draw_x= m.posterior_samples_f(newX,full_cov=True, size=3)
+
+
+
+noise_dict = {'output_index':newX[:,1:].astype(int)}
+
+
+newX = np.hstack([X2d,np.ones_like(X1)])
+#print(newX)
+noise_dict = {'output_index':newX[:,2:].astype(int)}
+m.predict(newX,Y_metadata=noise_dict)
+draw_x= m.posterior_samples_f(newX,full_cov=True, size=1)
+print(draw_x)

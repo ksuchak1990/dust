@@ -247,39 +247,56 @@ class UnscentedKalmanFilter(object):
 #define function fx and hx
 def f_x(x, GP):
     """ state transition function is a pretrained Gaussian Process"""
-    y_pred, y_unc, _ = GP.predict(np.array([x]))
+    file = open('gp_emulator.sav', 'rb')
+
+	# dump information to that file
+    GP = pickle.load(file)
+    #print(x.dtype)
+    y_pred, y_unc, _ = GP.predict(x)
 		    
-    return y_pred, y_unc
+    return y_pred[0]
     
 
 #measurement function
 def h_x(x):
     return x
 	
+
+
+newdf = np.genfromtxt('processed_data_new.csv', delimiter=',')[1:]
 dt=1
 # Step 1: Find sigma points, follow Van Der Merwe
-points = MerweScaledSigmaPoints(n=4,alpha=.1,beta=2,kappa=1)
-kf = UnscentedKalmanFilter(4,2, dt, fx=f_x, hx=h_x, points=points)
-kf.Q[0:2,0:2]=Q_discrete_white_noise(2,dt=dt,var=0.1)
-kf.Q[2:4,2:4]=Q_discrete_white_noise(2,dt=dt,var=0.1)
+points = MerweScaledSigmaPoints(n=5,alpha=10,beta=.2,kappa=1)
+kf = UnscentedKalmanFilter(5,5, dt, fx=f_x, hx=h_x, points=points)
+kf.Q[0:3,0:3]=Q_discrete_white_noise(3,dt=dt,var=0.5)
+kf.Q[3:5,3:5]=Q_discrete_white_noise(2,dt=dt,var=0.5)
 #kf.R = np.diag([range_std**2,elevation_angle_std**2])
-kf.x = np.array([0,90,1100,0])
-kf.P = np.diag([300**2,30**2,150**2,3**2])
+kf.x = np.array(newdf[0])
+kf.P = np.diag([3**2,3**2,3**2,3**2, 3**2])
 
+
+# open a file, where you stored the pickled data
+import pickle
+file = open('gp_emulator.sav', 'rb')
+
+# dump information to that file
+GP = pickle.load(file)
+
+# close the fil
+file.close()
+
+time = np.arange(1,34,dt)
 np.random.seed(200)
-pos=(0,0)
-
-time = np.arange(0,360+dt,dt)
 xs, ys = [],[]
 for t in time:
-    if t >= 60:
-        ac.vel[1]=300/60 #300m/min increase in elevation    
-    ac.update(dt) #move the aircraft
-    r = radar.noisy_reading(ac.pos)
-    ys.append(ac.pos[1])
     kf.predict()
-    kf.update([r[0],r[1]])
+    print('predict step successful')
+    kf.update(newdf[t])
+    print('update step successful')
+    print(kf.x)
     xs.append(kf.x)
+    ys.append(newdf[t])
+    print(t)
 xs = np.asarray(xs)
 
 #now plotting

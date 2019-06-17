@@ -27,7 +27,7 @@ class ParticleFilter:
     'do_ani': Boolean to determine if particle filter data should be animated
         and displayed
     '''
-    def __init__(self, model, number_of_particles, arr_std=0,dep_std=0, traffic_std=0, resample_window=10, do_copies=True, do_save=False):
+    def __init__(self, model, new_data, number_of_particles, count_std=0, abm_std=0, resample_window=1, do_copies=True, do_save=False):
         '''
         Initialise Particle Filter
 
@@ -40,24 +40,23 @@ class ParticleFilter:
         self.time = 0
         # Dimensions
         self.number_of_particles = number_of_particles
-        self.dimensions = len(model.agents2state().T)
+        self.dimensions = len(new_data[1,:])
         # Models
-        self.models = list([deepcopy(model) for _ in range(self.number_of_particles)])
-        for unique_id in range(len(self.models)):
-            self.models[unique_id].unique_id = unique_id
-        if not do_copies:
+        #self.models = list([deepcopy(model) for _ in range(self.number_of_particles)])
+        #for unique_id in range(len(self.models)):
+        #    self.models[unique_id].unique_id = unique_id
+        #if not do_copies:
             # Only relevent if there is randomness in the initialisation of the model.
-            for model in self.models:
-                model.__init__(*model.params)
+        #    for model in self.models:
+        #        model.__init__(*model.params)
         # Filter
         self.states = np.empty((self.number_of_particles, self.dimensions))
-        for particle in range(self.number_of_particles):
-            self.states[particle] = self.models[particle].agents2state()
+        for particle in range(self.number_of_particles):  #set initial conditions
+            self.states[particle] = new_data[0,:]
         self.weights = np.ones(self.number_of_particles)
         # Params
-        self.arr_std = arr_std
-        self.dep_std = dep_std
-        self.traffic_std=traffic_std
+        self.count_std = count_std  #error of the counts
+        self.abm_std = abm_std      #error of the ABM processes
         self.resample_window = resample_window
         # Save
         self.do_save = do_save
@@ -143,7 +142,7 @@ class ParticleFilter:
         
         return
 
-    def predict(self,measured_state):
+    def predict(self,model):
         '''
         Predict
 
@@ -158,17 +157,10 @@ class ParticleFilter:
         '''
        
         for particle in range(self.number_of_particles):
-            self.models[particle].state2agents(self.states[particle])
-            self.models[particle].step()
-            self.states[particle] = self.models[particle].agents2state()
+            #self.models[particle].state2agents(self.states[particle])
+            self.states[particle] =model.predict(self.states[particle],do_unc=False, do_deriv=False)           
+            #self.states[particle] = self.models[particle].agents2state()
         self.time += 1
-        return
-
-    def predict_one(self, particle):  # not working
-        map(self.predict_one, np.arange(self.number_of_particles))
-        self.models[particle].state2agents(self.states[particle])
-        self.models[particle].step()
-        self.states[particle] = self.models[particle].agents2state()
         return
 
     def save(self, true_state):

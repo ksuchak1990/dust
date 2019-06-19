@@ -294,7 +294,7 @@ class UKF:
         
         ticks = np.array([0.001,0.1,0.2,0.5,1.0])
         cbar = plt.colorbar(fraction=0.046,pad=0.04,shrink=0.71,
-                            ticks = ticks,space="uniform")
+                            ticks = ticks,spacing="uniform")
         plt.clim(0,1)
         cbar.set_alpha(1)
         cbar.draw_all()
@@ -412,7 +412,7 @@ class UKF:
     main function runs UKF over stationsim
     """
     def main_sequential(self):
-        time1 = datetime.datetime.now()
+        #time1 = datetime.datetime.now()
         np.random.seed(seed = 8)#seeding if  wanted else hash it
         self.base_model = Model(self.model_params) #station sim
         f_name = f"base_model_{self.pop_total}"
@@ -454,8 +454,8 @@ class UKF:
                     self.density_frames()
                     break
         
-        time2 = datetime.datetime.now()
-        print(time2-time1)
+        #time2 = datetime.datetime.now()
+        #print(time2-time1)
         return        
     
     def main_batch(self):
@@ -591,7 +591,7 @@ if __name__ == "__main__":
     model_params = {
                     'width': 200,
                     'height': 100,
-                    'pop_total': 100,
+                    'pop_total': 300,
                     'entrances': 3,
                     'entrance_space': 2,
                     'entrance_speed': 1,
@@ -614,8 +614,8 @@ if __name__ == "__main__":
                     'sample_rate': 1,   #how often to update kalman filter. higher number gives smoother (maybe oversmoothed) predictions
                     "do_restrict": True, #"restrict to a proportion prop of the agents being observed"
                     "do_animate": False,#"do animations of agent/wiggle aggregates"
-                    "do_wiggle_animate":False,
-                    "prop": 0.333,#proportion of agents observed. 1 is all <1/pop_total is none
+                    "do_wiggle_animate": True,
+                    "prop": 0.01,#proportion of agents observed. 1 is all <1/pop_total is none
                     "heatmap_rate": 2,# "after how many updates to record a frame"
                     "bin_size":10,
                     "do_batch":False
@@ -651,6 +651,8 @@ if __name__ == "__main__":
 
             if runs==1 and model_params["do_save"] == True:   #plat results of single run
                 c_mean,t_mean = U.plots()
+
+
 
 
 

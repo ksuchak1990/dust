@@ -39,26 +39,27 @@ class SRUKF:
         
         #init initial state
         self.x = srukf_params["init_x"]  #!!initialise some positions and covariances
+        self.n = self.x.shape[0] #state space dimension
+
         self.P = np.array([[1,0.5],[0.5,1]])
         #self.P = np.linalg.cholesky(self.x)
         self.S = np.linalg.cholesky(self.P)
-        self.Q = np.eye(self.x.shape[0])
-        self.R = np.eye(self.x.shape[0])
+        self.Q = np.eye(self.n)
+        self.R = np.eye(self.n)
         
         #init further parameters based on a through el
-        self.el = self.x.shape[0]
-        self.lam = srukf_params["a"]**2*(self.el+srukf_params["k"])
-        self.g = np.sqrt(self.el+self.lam) #gamma parameter
+        self.lam = srukf_params["a"]**2*(self.n+srukf_params["k"]) - self.n #lambda paramter calculated viar
+        self.g = np.sqrt(self.n+self.lam) #gamma parameter
 
         
         #init weights based on paramters a through el
-        self.wm = np.zeros(((2*self.x.shape[0])+1))
-        self.wm[0] = self.lam/(self.el+self.lam)
-        self.wc = np.zeros(((2*self.x.shape[0])+1,1))
+        self.wm = np.zeros(((2*self.n)+1))
+        self.wm[0] = self.lam/(self.n+self.lam)
+        self.wc = np.zeros(((2*self.n)+1,1))
         self.wc[0] = self.wm[0] + (1-srukf_params["a"]**2+srukf_params["b"])
 
-        other_weights =  1/(2*(self.el+self.lam))
-        for i in range(1,(2*self.x.shape[0])+1):        
+        other_weights =  1/(2*(self.n+self.lam))
+        for i in range(1,(2*self.n)+1):        
             self.wc[i] = other_weights
             self.wm[i] = other_weights  
             
@@ -70,17 +71,17 @@ class SRUKF:
 
     def Sigmas(self):
         "sigma point calculations based on current x and P"
-        "double loop here is slightly stupid but easiest way to maintain structure"
+        "double loop here is probably convoluted but easiest way to maintain structure"
      
         #sigmas build around mean and confidence in each dimension   
         
-        sigmas = np.zeros((self.x.shape[0],2*self.x.shape[0]+1))
+        sigmas = np.zeros((self.n,(2*self.n)+1))
         sigmas[:,0] = self.x
-        for i in range(self.x.shape[0]):
+        for i in range(self.n):
             sigmas[:,(i+1)] = self.x + self.g*self.S[i,i]
             
-        for i in range(self.x.shape[0]):
-            sigmas[:,self.x.shape[0]+i+1] = self.x - self.g*self.S[i,i]
+        for i in range(self.n):
+            sigmas[:,self.n+i+1] = self.x - self.g*self.S[i,i]
         return sigmas
     
 
@@ -115,17 +116,21 @@ class SRUKF:
             wnl_sigmas[:,i]*=self.wm[i]
 
         xhat = np.sum(wnl_sigmas,axis=1)        
-        Pxx =np.vstack([np.sqrt(self.wc[1])*(nl_sigmas.transpose()-xhat),self.sqrtQ])[1:,:]
+        Pxx =np.vstack([np.sqrt(self.wc[1][0])*(nl_sigmas.transpose()-xhat),self.sqrtQ])[1:,:]
         Sxx = np.linalg.qr(Pxx)[1]
-        u =  np.sqrt(np.sqrt(self.wc[0]))*(nl_sigmas[:,0]-xhat)
-        cholupdate(Sxx,u)
+        #up/downdating as necessary depending on sign of first covariance weight
+        u =  np.sqrt(np.sqrt(np.abs(self.wc[0][0])))*(nl_sigmas[:,0]-xhat)
+        if self.wc[0][0]>0:    
+            cholupdate(Sxx,u)
+        if self.wc[0][0]<0:    
+            choldowndate(Sxx,u)   
         self.Sxx= Sxx
         
         self.sigmas[:,0] = xhat
-        for i in range(self.x.shape[0]):
+        for i in range(self.n):
             self.sigmas[:,i+1] = xhat + self.g*self.Sxx[:,i]
-        for i in range(self.x.shape[0]):
-            self.sigmas[:,self.x.shape[0]+i+1] = xhat - self.g*self.Sxx[:,i]
+        for i in range(self.n):
+            self.sigmas[:,self.n+i+1] = xhat - self.g*self.Sxx[:,i]
         
         self.xhat = xhat
 
@@ -162,10 +167,15 @@ class SRUKF:
         yhat = np.sum(wnl_sigmas,axis=1)
         Pyy =np.vstack([np.sqrt(self.wc[1])*(nl_sigmas.transpose()-yhat),self.sqrtR])[1:,:]
         Syy = np.linalg.qr(Pyy)[1]
-        u =  np.sqrt(np.sqrt(self.wc[0]))*(nl_sigmas[:,0]-yhat)
+        u =  np.sqrt(np.sqrt(np.abs(self.wc[0])))*(nl_sigmas[:,0]-yhat)
         cholupdate(Syy,u)
+        if self.wc[0][0]>0:    
+            cholupdate(Syy,u)
+        if self.wc[0][0]<0:    
+            choldowndate(Syy,u)   
+        self.Syy= Syy
         
-        Pxy= np.zeros((self.x.shape[0],self.x.shape[0]))
+        Pxy= np.zeros((self.n,self.n))
         for i,wc in enumerate(self.wc):
             Pxy += wc*np.outer((sigmas[:,i].transpose()-self.xhat).transpose(),(nl_sigmas[:,i].transpose()-yhat))
             
@@ -193,7 +203,7 @@ class SRUKF:
 
 if __name__ == "__main__":
     srukf_params = {
-            "a":0.0001,#alpha between 1 and 1e-4 typically
+            "a":0.1,#alpha between 1 and 1e-4 typically
             "b":2,#beta set to 2 for gaussian 
             "k":0,#kappa usually 0 for state estimation and 3-dim(state) for parameters
             "init_x":np.array([0,0])
@@ -205,13 +215,14 @@ if __name__ == "__main__":
         z2 = z+ np.array([1,1])+ 0/4*np.random.randn(2)
         zs.append(z2)
         z=z2
+        
         srukf = SRUKF(srukf_params)
         srukf.predict()
         srukf.update(z)
         xs.append(srukf.xhat)
         
         
-        res = np.array(xs)-np.array(zs)
-        import matplotlib.pyplot as plt
-        plt.plot(res[:,0])
-        plt.plot(res[:,1])
+        #res = np.array(xs)-np.array(zs)
+        #import matplotlib.pyplot as plt
+        #plt.plot(res[:,0])
+        #plt.plot(res[:,1])

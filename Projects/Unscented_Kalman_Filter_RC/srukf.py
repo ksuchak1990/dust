@@ -69,19 +69,22 @@ class SRUKF:
         self.xhat = None
         self.Sxx = None
 
-    def Sigmas(self):
+        self.xs = []
+        self.Ss = []
+
+    def Sigmas(self,mean,S):
         "sigma point calculations based on current x and P"
         "double loop here is probably convoluted but easiest way to maintain structure"
      
         #sigmas build around mean and confidence in each dimension   
         
         sigmas = np.zeros((self.n,(2*self.n)+1))
-        sigmas[:,0] = self.x
+        sigmas[:,0] = mean
         for i in range(self.n):
-            sigmas[:,(i+1)] = self.x + self.g*self.S[i,i]
+            sigmas[:,(i+1)] = mean + self.g*S[:,i]
             
         for i in range(self.n):
-            sigmas[:,self.n+i+1] = self.x - self.g*self.S[i,i]
+            sigmas[:,self.n+i+1] = mean - self.g*S[:,i]
         return sigmas
     
 
@@ -102,7 +105,7 @@ class SRUKF:
         calculate predicted covariance using qr decomposition
         """
         #calculate NL projection of sigmas
-        self.sigmas = self.Sigmas()
+        self.sigmas = self.Sigmas(self.x,self.S)
         nl_sigmas = np.zeros((self.sigmas.shape))
         
         for i in range(self.sigmas.shape[1]):
@@ -124,15 +127,8 @@ class SRUKF:
             cholupdate(Sxx,u)
         if self.wc[0][0]<0:    
             choldowndate(Sxx,u)   
-        self.Sxx= Sxx
-        
-        self.sigmas[:,0] = xhat
-        for i in range(self.n):
-            self.sigmas[:,i+1] = xhat + self.g*self.Sxx[:,i]
-        for i in range(self.n):
-            self.sigmas[:,self.n+i+1] = xhat - self.g*self.Sxx[:,i]
-        
-        self.xhat = xhat
+        self.Sxx= Sxx #update xx UT
+        self.xhat = xhat #update xhat
 
         
     
@@ -155,7 +151,7 @@ class SRUKF:
         """
         
         
-        sigmas = self.sigmas
+        sigmas = self.Sigmas(self.xhat,self.Sxx) #update interim sigmas
         nl_sigmas = np.empty((sigmas.shape))
         for i in range(sigmas.shape[1]):
             nl_sigmas[:,i] = self.Hx(sigmas[:,i])
@@ -182,23 +178,30 @@ class SRUKF:
         
         K = np.matmul(Pxy,np.linalg.inv(np.matmul(Syy,Syy.T)))
         U = np.matmul(K,Syy)
-        "U is not a matrix and so requires dim(U) updates of Sxx using each column of U as a 1 step cholup/down/date"
         
+        #update xhat
         self.xhat += np.matmul(K,(z-yhat))
+        self.x=self.xhat
         
+        "U is a matrix (not a vector) and so requires dim(U) updates of Sxx using each column of U as a 1 step cholup/down/date as if it were a vector"
         for j in range(U.shape[0]):
             choldowndate(self.Sxx,U[:,j])
         self.S = Syy
+        
+        self.Ss.append(self.S)
+        self.xs.append(self.xhat)
+        
         
     def batch(self):
         """
         batch
         """
+        return
 
-        sigmas = self.P_Sigmas()
-        fsigmas = self.F_x(sigmas)
-        return fsigmas
 
+ys = np.zeros((10,2))
+for i in range(ys.shape[0]):
+    ys[i,:] = np.array([i,i]) + 0.5*np.random.normal(size=2)
 
 
 if __name__ == "__main__":
@@ -206,23 +209,30 @@ if __name__ == "__main__":
             "a":0.1,#alpha between 1 and 1e-4 typically
             "b":2,#beta set to 2 for gaussian 
             "k":0,#kappa usually 0 for state estimation and 3-dim(state) for parameters
-            "init_x":np.array([0,0])
+            "init_x":ys[0,:]
             }
-    z = np.array([0.,0.])
-    zs = []
+    
     xs = []
+    xs.append(srukf_params["init_x"])
+    srukf = SRUKF(srukf_params)
+
     for j in range(1,10):
-        z2 = z+ np.array([1,1])+ 0/4*np.random.randn(2)
-        zs.append(z2)
-        z=z2
+       
         
-        srukf = SRUKF(srukf_params)
         srukf.predict()
-        srukf.update(z)
+        y = ys[j,:]
+        srukf.update(y)
         xs.append(srukf.xhat)
         
         
-        #res = np.array(xs)-np.array(zs)
-        #import matplotlib.pyplot as plt
-        #plt.plot(res[:,0])
-        #plt.plot(res[:,1])
+        
+    res = np.array(xs)-np.array(ys)
+    
+    import matplotlib.pyplot as plt
+    xs=np.array(xs)
+    ys=np.array(ys)
+    
+    f = plt.figure()
+    plt.plot(xs[:,0],xs[:,1],label = "kf")
+    plt.plot(ys[:,0],ys[:,1],label="truth")
+    plt.legend()

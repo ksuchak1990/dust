@@ -174,7 +174,7 @@ class plots:
         width = self.model_params["width"]
         height = self.model_params["height"]
 
-        f = plt.figure()
+        f = plt.figure(figsize=(12,8))
         ax = f.add_subplot(111)
 
         plt.scatter(locs[:,0],locs[:,1],color="cyan")
@@ -292,12 +292,12 @@ class plots:
             a = np.load(f"ACTUAL_TRACKS_{pop}_0.npy")
             a = a[:,self.index2]
   
-        plt.figure()
+        plt.figure(figsize=(12,8))
         for j in range(int(self.model_params["pop_total"]*self.filter_params["prop"])):
             plt.plot(a[:,(2*j)],a[:,(2*j)+1])    
             plt.title("True Positions")
 
-        plt.figure()
+        plt.figure(figsize=(12,8))
         for j in range(int(self.model_params["pop_total"]*self.filter_params["prop"])):
             plt.plot(b[::self.sample_rate,2*j],b[::self.sample_rate,(2*j)+1])    
             plt.title("KF predictions")
@@ -328,7 +328,7 @@ class plots:
         
         c = np.vstack(list(c.values()))
         time_means = np.nanmean(c,axis=0)
-        plt.figure()
+        plt.figure(figsize=(12,8))
         plt.plot(time_means[::self.sample_rate])
         plt.axhline(y=0,color="r")
         plt.title("MAE over time")
@@ -341,7 +341,7 @@ class plots:
         a1 = a[:,(2*index):(2*index)+2]
         b1 = b[:,(2*index):(2*index)+2]
         
-        plt.figure()
+        plt.figure(figsize=(12,8))
         plt.plot(a1[:,0],a1[:,1],label= "True Path")
         plt.plot(b1[::self.sample_rate,0],b1[::self.sample_rate,1],label = "KF Prediction")
         plt.legend()
@@ -436,16 +436,15 @@ class plots:
         
     def pair_frames(self):
         "paired side by side preds/truth"
-        _,b,a_full = self.data_parser(True)
+        _,b,a_full = self.data_parser(False)
         a = a_full
         a = a[::self.filter_params["sample_rate"],self.index2]
-        b = b[::self.filter_params["sample_rate"],:]
 
-        for i in range(a.shape[0]):
+        for i in range(b.shape[0]):
             a2 = a[i,:]
             b2 = b[i,:]
             
-            f = plt.figure()
+            f = plt.figure(figsize=(12,8))
             ax = plt.subplot(111)
             plt.xlim([0,200])
             plt.ylim([0,100])
@@ -457,7 +456,7 @@ class plots:
             
             if np.nansum(a2-b2)>1e-4: #check for perfect conditions (initial)
             
-                for j in range(int(a.shape[1]/2)):
+                for j in range(int(b.shape[1]/2)):
                     a3 = a2[(2*j):(2*j)+2]
                     b3 = b2[(2*j):(2*j)+2]          
                     if not np.isnan(np.sum(a3+b3)): #check for finished agents that appear NaN

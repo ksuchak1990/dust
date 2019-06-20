@@ -77,7 +77,7 @@ class UKF:
         self.diff_densities = []
 
     
-    def F_x(self,x,dt,model1,model2):
+    def F_x(self,s,dt=1):
         """
         Transition function for each agent. where it is predicted to be.
         For station sim this is essentially gradient * v *dt assuming no collisions
@@ -91,10 +91,14 @@ class UKF:
         sets of lerps at 1 point (the same thing 5 times)
         """
         #maybe call this once before ukf.predict() rather than 5? times. seems slow
-        model2.step()
-        state = model2.agents2state()
-        state=state[self.index2]
-        model2 = model1
+        
+        f = open("temp_pickle_model","rb")
+        model = pickle.load(f)
+        f.close()
+            
+        model.state2agents(s)
+        model.step
+        state=model.agents2state()[self.index2]
         return state
    
     def H_x(location,z):
@@ -168,8 +172,14 @@ class UKF:
                 if self.filter_params["do_animate"]:
                     plots.heatmap(self)
             #!! redo this with pickles seems cleaner?
-            model1=model2=deepcopy(self.base_model)
-            self.ukf.predict(self, model1=model1,model2=model2) #predict where agents will jump
+            
+            f_name = f"temp_pickle_model"
+            f = open(f_name,"wb")
+            pickle.dump(self.base_model,f)
+            f.close()
+                            
+            self.ukf.predict(self) #predict where agents will jump
+            os.remove("temp_pickle_model")
             self.base_model.step() #jump stationsim agents forwards
             
             if _%self.filter_params["heatmap_rate"] == 0 :  #take frames for wiggles instead similar to heatmap above
@@ -226,6 +236,8 @@ class UKF:
         for _,z in enumerate(truth_list):
             if _%100==0:
                 print(f"iterations: {_}")
+                
+            
             model1=deepcopy(self.base_model)
             model2=deepcopy(self.base_model)
             self.ukf.predict(model1=model1,model2=model2)
@@ -281,9 +293,6 @@ class UKF:
             if do_fill:
                 a2_full[a3_full.shape[0]:,(2*i):(2*i)+2] = a3_full[-1,:]
 
-
-            
-
         return a2,b2,a2_full
     
     
@@ -292,7 +301,7 @@ if __name__ == "__main__":
     model_params = {
                     'width': 200,
                     'height': 100,
-                    'pop_total': 300,
+                    'pop_total': 10,
                     'entrances': 3,
                     'entrance_space': 2,
                     'entrance_speed': 1,
@@ -314,11 +323,11 @@ if __name__ == "__main__":
                     "Process_Noise": 1, #how reliable is prediction F_x lower value implies more reliable
                     'sample_rate': 1,   #how often to update kalman filter. higher number gives smoother (maybe oversmoothed) predictions
                     "do_restrict": True, #"restrict to a proportion prop of the agents being observed"
-                    "do_animate": True,#"do animations of agent/wiggle aggregates"
-                    "do_wiggle_animate": True,
-                    "do_density_animate":True,
-                    "do_pair_animate":True,
-                    "prop": 0.034,#proportion of agents observed. 1 is all <1/pop_total is none
+                    "do_animate": False,#"do animations of agent/wiggle aggregates"
+                    "do_wiggle_animate": False,
+                    "do_density_animate":False,
+                    "do_pair_animate":False,
+                    "prop": 1,#proportion of agents observed. 1 is all <1/pop_total is none
                     "heatmap_rate": 2,# "after how many updates to record a frame"
                     "bin_size":10,
                     "do_batch":False

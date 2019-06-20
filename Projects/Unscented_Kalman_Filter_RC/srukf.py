@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu May 23 11:13:26 2019
-
-@author: RC
-
-first attempt at a square root UKF class
-class built into 5 steps
--init
--Prediction SP generation
--Predictions
--Update SP generation
--Update
-
-SR filter generally the same as regular filters for efficiency 
-but more numerically stable wrt rounding errors 
-and preserving PSD covariance matrices
-
-based on
-https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6179312
-"""
-
 
 
 import numpy as np
@@ -27,25 +5,26 @@ from choldate import cholupdate,choldowndate
 #"pip install git+git://github.com/jcrudy/choldate.git"
 """
 for cholesky update/downdate.
-see cholupdate matlab equivalent not converted to numpy from LAPACK yet (probably never will be)
+see cholupdate matlab equivalent not converted into numpy.linalg from LAPACK yet (probably never will be)
+but I found this nice package in the meantime.
 """
 
-class SRUKF:
+class srukf:
     
-    def __init__(self,srukf_params):
+    def __init__(self,srukf_params,init_x,Fx,Hx,Q,R):
         """this needs to:
             - init x0, S_0,S_v and S_n     
         """
         
         #init initial state
-        self.x = srukf_params["init_x"]  #!!initialise some positions and covariances
+        self.x = init_x #!!initialise some positions and covariances
         self.n = self.x.shape[0] #state space dimension
 
-        self.P = np.array([[1,0.5],[0.5,1]])
+        self.P = np.eye(self.n)
         #self.P = np.linalg.cholesky(self.x)
         self.S = np.linalg.cholesky(self.P)
-        self.Q = np.eye(self.n)
-        self.R = np.eye(self.n)
+        self.Fx=Fx
+        self.Hx =Hx
         
         #init further parameters based on a through el
         self.lam = srukf_params["a"]**2*(self.n+srukf_params["k"]) - self.n #lambda paramter calculated viar
@@ -63,6 +42,8 @@ class SRUKF:
             self.wc[i] = other_weights
             self.wm[i] = other_weights  
             
+        self.Q=Q
+        self.R=R
         self.sqrtQ = np.linalg.cholesky(self.Q)
         self.sqrtR = np.linalg.cholesky(self.R)
          
@@ -73,10 +54,11 @@ class SRUKF:
         self.Ss = []
 
     def Sigmas(self,mean,S):
-        "sigma point calculations based on current x and P"
+        """sigma point calculations based on current mean x and  UT (upper triangular) 
+        decomposition S of covariance P"""
+        
         "double loop here is probably convoluted but easiest way to maintain structure"
      
-        #sigmas build around mean and confidence in each dimension   
         
         sigmas = np.zeros((self.n,(2*self.n)+1))
         sigmas[:,0] = mean
@@ -85,31 +67,24 @@ class SRUKF:
             
         for i in range(self.n):
             sigmas[:,self.n+i+1] = mean - self.g*S[:,i]
-        return sigmas
-    
+        return sigmas 
 
-    def Fx(self,sigma):
+    def predict(self,**fx_args):
         """
-        (non-)linear transition function taking current state space and predicting 
-        innovation
-        !! make this user defined?
-        """
-        sigma+= np.array([1,1])
-        return sigma
-  
-
-    def predict(self):
-        """
-        predict transitions
-        calculate estimates of new mean in the usual way
-        calculate predicted covariance using qr decomposition
+        - calculate sigmas using prior mean and UT element of covariance S
+        - predict interim sigmas X for next timestep using transition function Fx
+        - predict unscented mean for next timestep
+        - calculate interim S using concatenation of all but first column of Xs
+            and square root of process noise
+        - cholesky update to nudge on unstable 0th row
+        - calculate futher interim sigmas using interim S and unscented mean
         """
         #calculate NL projection of sigmas
         self.sigmas = self.Sigmas(self.x,self.S)
         nl_sigmas = np.zeros((self.sigmas.shape))
         
         for i in range(self.sigmas.shape[1]):
-            nl_sigmas[:,i] = self.Fx(self.sigmas[:,i])
+            nl_sigmas[:,i] = self.Fx(self.sigmas[:,i],**fx_args)
         
 
 
@@ -129,25 +104,21 @@ class SRUKF:
             choldowndate(Sxx,u)   
         self.Sxx= Sxx #update xx UT
         self.xhat = xhat #update xhat
-
-        
-    
-    
-    def Hx(self,x):
-        """
-        measurement function converting state space into same dimensions 
-        as measurements to assess residuals
-        """
-
-        return x
-    
     
     def update(self,z):     
         """
-        calculate residuals
-        calculate kalman gain
-        merge prediction with measurements in the Kalman style using
-        cholesky update function
+        Does numerous things in the following order
+        - calculate interim sigmas using Sxx and unscented mean estimate
+        - calculate measurement sigmas Y = h(X)
+        - calculate unscented mean of Ys
+        - calculate qr decomposition of concatenated columns of all but first Y scaled 
+            by w1c and square root of sensor noise to calculate interim S
+        - cholesky update to nudge interim S on potentially unstable 0th 
+            column of Y
+        - calculate sum of scaled cross covariances between Ys and Xs Pxy
+        - calculate kalman gain
+        - calculate x update
+        - calculate S update
         """
         
         
@@ -192,47 +163,10 @@ class SRUKF:
         self.xs.append(self.xhat)
         
         
+        
     def batch(self):
         """
-        batch
+        batch function maybe build later
         """
         return
 
-
-ys = np.zeros((10,2))
-for i in range(ys.shape[0]):
-    ys[i,:] = np.array([i,i]) + 0.5*np.random.normal(size=2)
-
-
-if __name__ == "__main__":
-    srukf_params = {
-            "a":0.1,#alpha between 1 and 1e-4 typically
-            "b":2,#beta set to 2 for gaussian 
-            "k":0,#kappa usually 0 for state estimation and 3-dim(state) for parameters
-            "init_x":ys[0,:]
-            }
-    
-    xs = []
-    xs.append(srukf_params["init_x"])
-    srukf = SRUKF(srukf_params)
-
-    for j in range(1,10):
-       
-        
-        srukf.predict()
-        y = ys[j,:]
-        srukf.update(y)
-        xs.append(srukf.xhat)
-        
-        
-        
-    res = np.array(xs)-np.array(ys)
-    
-    import matplotlib.pyplot as plt
-    xs=np.array(xs)
-    ys=np.array(ys)
-    
-    f = plt.figure()
-    plt.plot(xs[:,0],xs[:,1],label = "kf")
-    plt.plot(ys[:,0],ys[:,1],label="truth")
-    plt.legend()

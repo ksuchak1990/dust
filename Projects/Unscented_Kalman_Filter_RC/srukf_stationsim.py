@@ -64,7 +64,7 @@ class srukf_ss:
         
         self.srukf_histories = []
    
-    def F_x(self,state,model1,model2):
+    def F_x(self):
         """
         Transition function for each agent. where it is predicted to be.
         For station sim this is essentially gradient * v *dt assuming no collisions
@@ -79,11 +79,12 @@ class srukf_ss:
         """
         #maybe call this once before ukf.predict() rather than 5? times. seems slow
         
-        model2.state2agents(state)
-        model2.step()
-        
-        state=model2.agents2state()[self.index2]
-        model2 = model1
+        f = open("temp_pickle_model","rb")
+        model = pickle.load(f)
+        f.close()
+            
+        model.step()
+        state = model.agents2state()[self.index2]
         return state
    
     def H_x(location,z):
@@ -103,18 +104,20 @@ class srukf_ss:
     
     
     def main(self):
+        np.random.randint(8)
         self.init_srukf() 
         for _ in range(self.number_of_iterations-1):
             if _%100 ==0: #progress bar
                 print(f"iterations: {_}")
 
-            #!! redo this with pickles seems cleaner?
-            model1=model2=deepcopy(self.base_model)
-            fx_args = {"model1":model1,"model2":model2}
+            f_name = f"temp_pickle_model"
+            f = open(f_name,"wb")
+            pickle.dump(self.base_model,f)
+            f.close()
             
-            self.srukf.predict(**fx_args) #predict where agents will jump
+            self.srukf.predict() #predict where agents will jump
             self.base_model.step() #jump stationsim agents forwards
-
+            
 
             if self.base_model.time_id%self.sample_rate == 0: #update kalman filter assimilate predictions/measurements
                 
@@ -182,7 +185,7 @@ if __name__ == "__main__":
     model_params = {
                     'width': 200,
                     'height': 100,
-                    'pop_total': 1,
+                    'pop_total': 3,
                     'entrances': 3,
                     'entrance_space': 2,
                     'entrance_speed': 1,
@@ -225,3 +228,4 @@ if __name__ == "__main__":
     sr.main()
     a,b,a_full = sr.data_parser(True)
     plots.diagnostic_plots(sr)
+    res = a-b

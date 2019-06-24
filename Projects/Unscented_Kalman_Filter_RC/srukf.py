@@ -158,7 +158,7 @@ class srukf:
         for j in range(U.shape[0]):
             choldowndate(self.Sxx,U[:,j])
         self.S = Syy
-        
+
         self.Ss.append(self.S)
         self.xs.append(self.xhat)
         

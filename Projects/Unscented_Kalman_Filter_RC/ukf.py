@@ -77,7 +77,7 @@ class UKF:
         self.diff_densities = []
 
     
-    def F_x(self,s,dt=1):
+    def F_x(self,x,dt):
         """
         Transition function for each agent. where it is predicted to be.
         For station sim this is essentially gradient * v *dt assuming no collisions
@@ -90,23 +90,30 @@ class UKF:
         I.E predicts lerps from each sigma point rather than using
         sets of lerps at 1 point (the same thing 5 times)
         """
-        #maybe call this once before ukf.predict() rather than 5? times. seems slow
-        
+        #maybe call this once before ukf.predict() rather than 5? times. seems slow        
         f = open("temp_pickle_model","rb")
         model = pickle.load(f)
         f.close()
-            
-        model.state2agents(s)
-        model.step
-        state=model.agents2state()[self.index2]
+        
+        model.state2agents(state = x)    
+        model.step()
+        state = model.agents2state()
         return state
    
-    def H_x(location,z):
+    def H_x(self,state):
         """
         Measurement function for agent.
         !!im guessing this is just the output from base_model.step
+        take full state return those observed and NaNs otherwise
+        
         """
-        return z
+        #state = state[self.index2]
+        
+        #mask = np.ones_like(state)
+        #mask[self.index2]=False
+        #state[np.where(mask!=0)] = np.nan
+        
+        return state
     
     """
     initialises UKFs various parameter
@@ -121,7 +128,7 @@ class UKF:
     
     def init_ukf(self):
         state = self.base_model.agents2state(self)
-        state = state[self.index2] #observed agents only
+        #state = state[self.index2] #observed agents only
         sigmas = MSSP(n=len(state),alpha=1,beta=.2,kappa=1) #sigmapoints
         self.ukf =  UNKF(dim_x=len(state),dim_z=len(state)
                         ,fx = self.F_x, hx=self.H_x
@@ -142,7 +149,7 @@ class UKF:
         #    i2 = (2*(i+1))
         #    self.ukf.Q[i1:i2,i1:i2] =  QDWN(2,dt=1,var=self.filter_params["Process_Noise"])  
             #self.ukf.Q[i1:i2,i1:i2] = np.array([[2,1],[1,2]])*self.filter_params["Process_Noise"]
-
+            
         self.ukf.Q = np.eye(len(state))*self.filter_params["Process_Noise"]
         self.UKF_histories.append(self.ukf.x)
         
@@ -178,7 +185,7 @@ class UKF:
             pickle.dump(self.base_model,f)
             f.close()
                             
-            self.ukf.predict(self) #predict where agents will jump
+            self.ukf.predict(self.base_model) #predict where agents will jump
             os.remove("temp_pickle_model")
             self.base_model.step() #jump stationsim agents forwards
             
@@ -236,13 +243,17 @@ class UKF:
         for _,z in enumerate(truth_list):
             if _%100==0:
                 print(f"iterations: {_}")
-                
             
-            model1=deepcopy(self.base_model)
-            model2=deepcopy(self.base_model)
-            self.ukf.predict(model1=model1,model2=model2)
+            f_name = f"temp_pickle_model"
+            f = open(f_name,"wb")
+            pickle.dump(self.base_model,f)
+            f.close()
+            
+            
+            self.ukf.predict()
             self.base_model.step()
             if  _%self.filter_params["sample_rate"]==0:
+                #look into residual z and see if can process as shorter or use nans?
                 self.ukf.update(z)
                 self.UKF_histories.append(self.ukf.x)
                 self.Ps.append(self.ukf.P)
@@ -301,7 +312,7 @@ if __name__ == "__main__":
     model_params = {
                     'width': 200,
                     'height': 100,
-                    'pop_total': 10,
+                    'pop_total': 50,
                     'entrances': 3,
                     'entrance_space': 2,
                     'entrance_speed': 1,
@@ -323,11 +334,11 @@ if __name__ == "__main__":
                     "Process_Noise": 1, #how reliable is prediction F_x lower value implies more reliable
                     'sample_rate': 1,   #how often to update kalman filter. higher number gives smoother (maybe oversmoothed) predictions
                     "do_restrict": True, #"restrict to a proportion prop of the agents being observed"
-                    "do_animate": False,#"do animations of agent/wiggle aggregates"
+                    "do_animate": True,#"do animations of agent/wiggle aggregates"
                     "do_wiggle_animate": False,
                     "do_density_animate":False,
                     "do_pair_animate":False,
-                    "prop": 1,#proportion of agents observed. 1 is all <1/pop_total is none
+                    "prop": 0.2,#proportion of agents observed. 1 is all <1/pop_total is none
                     "heatmap_rate": 2,# "after how many updates to record a frame"
                     "bin_size":10,
                     "do_batch":False
@@ -343,7 +354,7 @@ if __name__ == "__main__":
             U.main_sequential()
             
             if runs==1 and model_params["do_save"] == True:   #plat results of single run
-                c_mean,t_mean = U.plots()
+                c_mean,t_mean = plots.diagnostic_plots(U)
             
             
             save=True

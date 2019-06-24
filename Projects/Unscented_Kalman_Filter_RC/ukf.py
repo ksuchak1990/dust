@@ -108,12 +108,13 @@ class UKF:
         
         """
         #state = state[self.index2]
-        
         #mask = np.ones_like(state)
         #mask[self.index2]=False
-        #state[np.where(mask!=0)] = np.nan
+        #z = state[np.where(mask==0)]
         
-        return state
+        z = state[self.index2]
+        
+        return z
     
     """
     initialises UKFs various parameter
@@ -135,7 +136,7 @@ class UKF:
                         , dt=1, points=sigmas)#init UKF
         self.ukf.x = state #initial state
         #sensor noise. larger noise implies less trust in sensor and to favour prediction
-        self.ukf.R = np.eye(len(state))*self.filter_params["Sensor_Noise"]
+        self.ukf.R = np.eye(len(self.index2))*self.filter_params["Sensor_Noise"]
         #initial guess for state space uncertainty
         self.ukf.P = np.eye(len(state))
         
@@ -270,13 +271,13 @@ class UKF:
         a = {}
         "UKF predictions for observed above"
         b = np.vstack(self.UKF_histories)
-        for k,index in enumerate(self.index):
-            a[k] =  self.base_model.agents[index].history_loc
+        for k in range(self.pop_total):
+            a[k] =  self.base_model.agents[k].history_loc
             
         max_iter = max([len(value) for value in a.values()])
         
-        a2= np.zeros((max_iter,self.sample_size*2))*np.nan
-        b2= np.zeros((max_iter,self.sample_size*2))*np.nan
+        a2= np.zeros((max_iter,self.pop_total*2))*np.nan
+        b2= np.zeros((max_iter,self.pop_total*2))*np.nan
 
         #!!possibly change to make NAs at end be last position
         for i in range(int(a2.shape[1]/2)):
@@ -312,7 +313,7 @@ if __name__ == "__main__":
     model_params = {
                     'width': 200,
                     'height': 100,
-                    'pop_total': 50,
+                    'pop_total': 10,
                     'entrances': 3,
                     'entrance_space': 2,
                     'entrance_speed': 1,
@@ -354,7 +355,9 @@ if __name__ == "__main__":
             U.main_sequential()
             
             if runs==1 and model_params["do_save"] == True:   #plat results of single run
-                c_mean,t_mean = plots.diagnostic_plots(U)
+                c_mean,t_mean = plots.diagnostic_plots(U,False)
+                c_mean2,t_mean2 = plots.diagnostic_plots(U,True)
+
             
             
             save=True
@@ -364,8 +367,8 @@ if __name__ == "__main__":
                 np.save(f"ACTUAL_TRACKS_{pop}_{i}",a_full)
                 np.save(f"PARTIAL_TRACKS_{pop}_{i}",a)
                 np.save(f"UKF_TRACKS_{pop}_{i}",b)
-                entrance_times = np.array([agent.time_start for agent in U.base_model.agents])
-                np.save(f"{pop}_entrance_times",entrance_times)
+                #entrance_times = np.array([agent.time_start for agent in U.base_model.agents])
+                #np.save(f"{pop}_entrance_times",entrance_times)
 
         else:
             U = UKF(Model, model_params,filter_params)

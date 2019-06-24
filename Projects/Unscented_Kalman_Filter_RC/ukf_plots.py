@@ -194,7 +194,7 @@ class plots:
         
         ticks = np.array([0.001,0.1,0.2,0.5,1.0])
         cbar = plt.colorbar(fraction=0.046,pad=0.04,shrink=0.71,
-                            ticks = ticks,spacing="uniform")
+                            ticks = ticks,spacing="proportional")
         plt.clim(0,1)
         cbar.set_alpha(1)
         cbar.draw_all()
@@ -269,7 +269,7 @@ class plots:
             #!! numbers adjusted by trial and error for 200x100 field. 
             #should probably generalise this and the bin structure at some point
             cbar = plt.colorbar(im,fraction=0.046,pad=0.04,shrink=0.71,
-                                ticks = ticks)
+                                ticks = ticks,spacing="proportional")
             plt.clim(0,1)
             cbar.set_alpha(1)
             cbar.draw_all()
@@ -285,20 +285,34 @@ class plots:
             self.wiggle_frame_number+=1
         
     
-    def diagnostic_plots(self):
+    def diagnostic_plots(self,observed):
         a ,b,a_full = self.data_parser(False)
+        if observed:
+                a = a[:,self.index2]
+                b = b[:,self.index2]
+        else:      
+                mask = np.ones(a.shape[1])
+                mask[self.index2]=False
+                a = a[:,np.where(mask!=0)][:,0,:]
+                b = b[:,np.where(mask!=0)][:,0,:]
+        
         if self.filter_params["do_batch"]:
             pop = self.model_params["pop_total"]
             a = np.load(f"ACTUAL_TRACKS_{pop}_0.npy")
-            a = a[:,self.index2]
-  
+            
+        if observed:
+            plot_range = self.model_params["pop_total"]*(self.filter_params["prop"])
+        else:
+            plot_range = self.model_params["pop_total"]*(1-self.filter_params["prop"])
+
+            
         plt.figure(figsize=(12,8))
-        for j in range(int(self.model_params["pop_total"]*self.filter_params["prop"])):
+        for j in range(int(plot_range)):
             plt.plot(a[:,(2*j)],a[:,(2*j)+1])    
             plt.title("True Positions")
 
         plt.figure(figsize=(12,8))
-        for j in range(int(self.model_params["pop_total"]*self.filter_params["prop"])):
+        for j in range(int(plot_range)):
             plt.plot(b[::self.sample_rate,2*j],b[::self.sample_rate,(2*j)+1])    
             plt.title("KF predictions")
 

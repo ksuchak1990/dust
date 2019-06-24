@@ -21,7 +21,6 @@ citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.80.1421&rep=rep1&type=pdf
 """
 
 
-
 import numpy as np
 from math import floor
 from StationSim_Wiggle import Model,Agent
@@ -29,7 +28,8 @@ from ukf_plots import plots,animations
 from copy import deepcopy
 import pickle
 from srukf import srukf
-
+import matplotlib.pyplot as plt
+plt.style.use("dark_background")
 
 
 class srukf_ss:
@@ -64,7 +64,7 @@ class srukf_ss:
         
         self.srukf_histories = []
    
-    def F_x(self):
+    def F_x(self,state,**fx_args):
         """
         Transition function for each agent. where it is predicted to be.
         For station sim this is essentially gradient * v *dt assuming no collisions

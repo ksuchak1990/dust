@@ -286,7 +286,7 @@ class plots:
         
     
     def diagnostic_plots(self,observed):
-        a ,b,a_full = self.data_parser(False)
+        a ,b = self.data_parser(False)
         if observed:
                 a = a[:,self.index2]
                 b = b[:,self.index2]

@@ -91,7 +91,7 @@ class UKF:
         sets of lerps at 1 point (the same thing 5 times)
         """
         #maybe call this once before ukf.predict() rather than 5? times. seems slow        
-        f = open("temp_pickle_model","rb")
+        f = open("temp_pickle_model_ukf","rb")
         model = pickle.load(f)
         f.close()
         
@@ -163,7 +163,7 @@ class UKF:
     main function runs UKF over stationsim
     """
     def main_sequential(self):
-        #time1 = datetime.datetime.now()
+        time1 = datetime.datetime.now()
         np.random.seed(seed = 8)#seeding if  wanted else hash it
         self.base_model = Model(self.model_params) #station sim
         f_name = f"base_model_{self.pop_total}"
@@ -181,13 +181,13 @@ class UKF:
                     plots.heatmap(self)
             #!! redo this with pickles seems cleaner?
             
-            f_name = f"temp_pickle_model"
+            f_name = f"temp_pickle_model_ukf"
             f = open(f_name,"wb")
             pickle.dump(self.base_model,f)
             f.close()
                             
             self.ukf.predict(self.base_model) #predict where agents will jump
-            os.remove("temp_pickle_model")
+            os.remove("temp_pickle_model_ukf")
             self.base_model.step() #jump stationsim agents forwards
             
             if _%self.filter_params["heatmap_rate"] == 0 :  #take frames for wiggles instead similar to heatmap above
@@ -199,8 +199,11 @@ class UKF:
                 state = self.base_model.agents2state()[self.index2] #observed agents states
                 self.ukf.update(z=state) #update UKF
                 self.UKF_histories.append(self.ukf.x) #append histories
+                self.Ps.append(self.ukf.P)
 
-                
+                #if _%self.filter_params["assimilation_rate"]==0:
+                #    self.ukf.x = self.base_model.agents2state()
+            
                
                 
                 if self.base_model.pop_finished == self.pop_total: #break condition
@@ -216,8 +219,8 @@ class UKF:
                         animations.animate(self,"output_pairs","pairs")
                     break
         
-        #time2 = datetime.datetime.now()
-        #print(time2-time1)
+        time2 = datetime.datetime.now()
+        print(time2-time1)
         return        
     
     def main_batch(self):
@@ -245,13 +248,14 @@ class UKF:
             if _%100==0:
                 print(f"iterations: {_}")
             
-            f_name = f"temp_pickle_model"
+            f_name = f"temp_pickle_model_ukf"
             f = open(f_name,"wb")
             pickle.dump(self.base_model,f)
             f.close()
             
             
-            self.ukf.predict()
+            self.ukf.predict(self.base_model)
+            os.remove("temp_pickle_model_ukf")
             self.base_model.step()
             if  _%self.filter_params["sample_rate"]==0:
                 #look into residual z and see if can process as shorter or use nans?
@@ -259,6 +263,7 @@ class UKF:
                 self.UKF_histories.append(self.ukf.x)
                 self.Ps.append(self.ukf.P)
             
+
         time2 = datetime.datetime.now()#end timer
         print(f"time taken: {time2-time1}")    #print elapsed time
         
@@ -268,44 +273,47 @@ class UKF:
         #!! with nans and 
         sample_rate = self.sample_rate
         "partial true observations"
-        a = {}
         "UKF predictions for observed above"
-        b = np.vstack(self.UKF_histories)
-        for k in range(self.pop_total):
-            a[k] =  self.base_model.agents[k].history_loc
-            
-        max_iter = max([len(value) for value in a.values()])
+
+        a2 = {}
+        for k,agent in  enumerate(self.base_model.agents):
+            a2[k] =  agent.history_loc
+        max_iter = max([len(value) for value in a2.values()])
+        b2 = np.vstack(self.UKF_histories)
         
-        a2= np.zeros((max_iter,self.pop_total*2))*np.nan
-        b2= np.zeros((max_iter,self.pop_total*2))*np.nan
-
-        #!!possibly change to make NAs at end be last position
-        for i in range(int(a2.shape[1]/2)):
-            a3 = np.vstack(list(a.values())[i])
-            a2[:a3.shape[0],(2*i):(2*i)+2] = a3
+        a= np.zeros((max_iter,self.pop_total*2))*np.nan
+        b= np.zeros((max_iter,b2.shape[1]))*np.nan
+        
+  
+        for i in range(int(a.shape[1]/2)):
+            a3 = np.vstack(list(a2.values())[i])
+            a[:a3.shape[0],(2*i):(2*i)+2] = a3
             if do_fill:
-                a2[a3.shape[0]:,(2*i):(2*i)+2] = a3[-1,:]
+                a[a3.shape[0]:,(2*i):(2*i)+2] = a3[-1,:]
 
-
-        for j in range(int(b2.shape[0]//sample_rate)):
-            b2[j*sample_rate,:] = b[j,:]
+        
+        for j in range(int(b.shape[0]//sample_rate)):
+            b[j*sample_rate,:] = b2[j,:]
             
         "all agent observations"
-        a_full = {}
+        
+        return a,b
+    
+    
+    def cov2cor(self,cov):
+        """
+        function to convert square cov to corr matrix
+        """
+        n = cov.shape[0]
+        variances = np.diag(cov)
+        deviations = np.sqrt(variances)
+        
+        for i in range(n): 
+            cov[i,:]/= deviations[i]
+            cov[:,i]/= deviations[i]
 
-        for k,agent in  enumerate(self.base_model.agents):
-            a_full[k] =  agent.history_loc
-            
-        max_iter = max([len(value) for value in a_full.values()])
-        a2_full= np.zeros((max_iter,self.pop_total*2))*np.nan
-
-        for i in range(int(a2_full.shape[1]/2)):
-            a3_full = np.vstack(list(a_full.values())[i])
-            a2_full[:a3_full.shape[0],(2*i):(2*i)+2] = a3_full
-            if do_fill:
-                a2_full[a3_full.shape[0]:,(2*i):(2*i)+2] = a3_full[-1,:]
-
-        return a2,b2,a2_full
+    
+        
     
     
 if __name__ == "__main__":
@@ -334,12 +342,13 @@ if __name__ == "__main__":
                     "Sensor_Noise":  1, # how reliable are measurements H_x. lower value implies more reliable
                     "Process_Noise": 1, #how reliable is prediction F_x lower value implies more reliable
                     'sample_rate': 1,   #how often to update kalman filter. higher number gives smoother (maybe oversmoothed) predictions
+                    "assimilation_rate": 50, #every assimilate_rate iterations 
                     "do_restrict": True, #"restrict to a proportion prop of the agents being observed"
                     "do_animate": True,#"do animations of agent/wiggle aggregates"
                     "do_wiggle_animate": False,
                     "do_density_animate":False,
                     "do_pair_animate":False,
-                    "prop": 0.2,#proportion of agents observed. 1 is all <1/pop_total is none
+                    "prop": 1,#proportion of agents observed. 1 is all <1/pop_total is none
                     "heatmap_rate": 2,# "after how many updates to record a frame"
                     "bin_size":10,
                     "do_batch":False
@@ -355,16 +364,16 @@ if __name__ == "__main__":
             U.main_sequential()
             
             if runs==1 and model_params["do_save"] == True:   #plat results of single run
-                c_mean,t_mean = plots.diagnostic_plots(U,False)
+                if filter_params["prop"]<1:
+                    c_mean,t_mean = plots.diagnostic_plots(U,False)
                 c_mean2,t_mean2 = plots.diagnostic_plots(U,True)
 
             
             
             save=True
             if save:
-                a,b,a_full = U.data_parser(True)
+                a,b = U.data_parser(True)
                 pop = model_params["pop_total"]
-                np.save(f"ACTUAL_TRACKS_{pop}_{i}",a_full)
                 np.save(f"PARTIAL_TRACKS_{pop}_{i}",a)
                 np.save(f"UKF_TRACKS_{pop}_{i}",b)
                 #entrance_times = np.array([agent.time_start for agent in U.base_model.agents])
@@ -373,7 +382,7 @@ if __name__ == "__main__":
         else:
             U = UKF(Model, model_params,filter_params)
             U.main_batch()
-            a,b,a_full = U.data_parser(False)
+            a,b = U.data_parser(False)
 
             if runs==1 and model_params["do_save"] == True:   #plat results of single run
                 c_mean,t_mean = plots.plots()

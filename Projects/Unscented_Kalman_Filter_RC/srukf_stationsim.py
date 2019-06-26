@@ -23,14 +23,16 @@ citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.80.1421&rep=rep1&type=pdf
 
 import numpy as np
 from math import floor
-from StationSim_Wiggle import Model,Agent
-from ukf_plots import plots,animations
-from copy import deepcopy
-import pickle
-from srukf import srukf
 import matplotlib.pyplot as plt
-plt.style.use("dark_background")
+import datetime
+import pickle
 
+
+from StationSim_Wiggle import Model
+from ukf_plots import plots,animations
+from srukf import srukf
+
+plt.style.use("dark_background")
 
 class srukf_ss:
     def __init__(self,model_params,filter_params,srukf_params):
@@ -38,7 +40,8 @@ class srukf_ss:
         #call params
         self.model_params = model_params #stationsim parameters
         self.filter_params = filter_params # ukf parameters
-    
+        self.srukf_params = srukf_params
+        
         self.base_model = Model(self.model_params) #station sim
 
         """
@@ -64,7 +67,7 @@ class srukf_ss:
         
         self.srukf_histories = []
    
-    def F_x(self,state,**fx_args):
+    def fx(self,x,**fx_args):
         """
         Transition function for each agent. where it is predicted to be.
         For station sim this is essentially gradient * v *dt assuming no collisions
@@ -77,43 +80,59 @@ class srukf_ss:
         I.E predicts lerps from each sigma point rather than using
         sets of lerps at 1 point (the same thing 5 times)
         """
-        #maybe call this once before ukf.predict() rather than 5? times. seems slow
-        
-        f = open("temp_pickle_model","rb")
+        #maybe call this once before ukf.predict() rather than 5? times. seems slow        
+        f = open("temp_pickle_model_srukf","rb")
         model = pickle.load(f)
         f.close()
-            
+        
+        model.state2agents(state = x)    
         model.step()
-        state = model.agents2state()[self.index2]
+        state = model.agents2state()
         return state
    
-    def H_x(location,z):
+    def hx(self,state,**hx_args):
         """
         Measurement function for agent.
         !!im guessing this is just the output from base_model.step
+        take full state return those observed and NaNs otherwise
+        
         """
-        return z
+        #state = state[self.index2]
+        #mask = np.ones_like(state)
+        #mask[self.index2]=False
+        #z = state[np.where(mask==0)]
+        
+        state = state[self.index2]
+        
+        return state
     
     def init_srukf(self):
         state = self.base_model.agents2state(self)
         Q = np.eye(self.pop_total*2)
-        R = np.eye(self.pop_total*2)
-        self.srukf = srukf(srukf_params,state,self.F_x,self.H_x,Q,R)
+        R = np.eye(len(self.index2))
+        self.srukf = srukf(srukf_params,state,self.fx,self.hx,Q,R)
         
         self.srukf_histories.append(self.srukf.x)
     
     
     def main(self):
-        np.random.randint(8)
+        np.random.seed(seed = 8)#seeding if  wanted else hash it
+        #np.random.seed(seed = 7)#seeding if  wanted else hash it
+
+        time1 = datetime.datetime.now()#timer
+        
         self.init_srukf() 
         for _ in range(self.number_of_iterations-1):
             if _%100 ==0: #progress bar
                 print(f"iterations: {_}")
+                
 
-            f_name = f"temp_pickle_model"
+            f_name = "temp_pickle_model_srukf"
             f = open(f_name,"wb")
             pickle.dump(self.base_model,f)
             f.close()
+            
+            
             
             self.srukf.predict() #predict where agents will jump
             self.base_model.step() #jump stationsim agents forwards
@@ -121,56 +140,48 @@ class srukf_ss:
 
             if self.base_model.time_id%self.sample_rate == 0: #update kalman filter assimilate predictions/measurements
                 
-                state = self.base_model.agents2state()[self.index2] #observed agents states
-                self.srukf.update(z=state) #update UKF
+                state = self.base_model.agents2state() #observed agents states
+                self.srukf.update(z=state[self.index2]) #update UKF
                 self.srukf_histories.append(self.srukf.x) #append histories
-        
+                self.srukf.x[sr.srukf.x<0]=0
+                x = self.srukf.x
+                S = self.srukf.S
+                a = 1
             if self.base_model.pop_finished == self.pop_total: #break condition
                 break
         
+        time2 = datetime.datetime.now()#timer
+        print(time2-time1)
         
     def data_parser(self,do_fill):
         #!! with nans and 
         sample_rate = self.sample_rate
         "partial true observations"
-        a = {}
         "UKF predictions for observed above"
-        b = np.vstack(self.srukf_histories)
-        for k,index in enumerate(self.index):
-            a[k] =  self.base_model.agents[index].history_loc
-            
-        max_iter = max([len(value) for value in a.values()])
+
+        a2 = {}
+        for k,agent in  enumerate(self.base_model.agents):
+            a2[k] =  agent.history_loc
+        max_iter = max([len(value) for value in a2.values()])
+        b2 = np.vstack(self.srukf_histories)
         
-        a2= np.zeros((max_iter,self.sample_size*2))*np.nan
-        b2= np.zeros((max_iter,self.sample_size*2))*np.nan
-
-        #!!possibly change to make NAs at end be last position
-        for i in range(int(a2.shape[1]/2)):
-            a3 = np.vstack(list(a.values())[i])
-            a2[:a3.shape[0],(2*i):(2*i)+2] = a3
+        a= np.zeros((max_iter,self.pop_total*2))*np.nan
+        b= np.zeros((max_iter,b2.shape[1]))*np.nan
+        
+  
+        for i in range(int(a.shape[1]/2)):
+            a3 = np.vstack(list(a2.values())[i])
+            a[:a3.shape[0],(2*i):(2*i)+2] = a3
             if do_fill:
-                a2[a3.shape[0]:,(2*i):(2*i)+2] = a3[-1,:]
+                a[a3.shape[0]:,(2*i):(2*i)+2] = a3[-1,:]
 
-
-        for j in range(int(b2.shape[0]//sample_rate)):
-            b2[j*sample_rate,:] = b[j,:]
+        
+        for j in range(int(b.shape[0]//sample_rate)):
+            b[j*sample_rate,:] = b2[j,:]
             
         "all agent observations"
-        a_full = {}
-
-        for k,agent in  enumerate(self.base_model.agents):
-            a_full[k] =  agent.history_loc
-            
-        max_iter = max([len(value) for value in a_full.values()])
-        a2_full= np.zeros((max_iter,self.pop_total*2))*np.nan
-
-        for i in range(int(a2_full.shape[1]/2)):
-            a3_full = np.vstack(list(a_full.values())[i])
-            a2_full[:a3_full.shape[0],(2*i):(2*i)+2] = a3_full
-            if do_fill:
-                a2_full[a3_full.shape[0]:,(2*i):(2*i)+2] = a3_full[-1,:]
-
-        return a2,b2,a2_full
+        
+        return a,b
 
 
 
@@ -185,7 +196,7 @@ if __name__ == "__main__":
     model_params = {
                     'width': 200,
                     'height': 100,
-                    'pop_total': 3,
+                    'pop_total': 50,
                     'entrances': 3,
                     'entrance_space': 2,
                     'entrance_speed': 1,
@@ -204,7 +215,7 @@ if __name__ == "__main__":
         
     filter_params = {         
                     "Sensor_Noise":  1, # how reliable are measurements H_x. lower value implies more reliable
-                    "Process_Noise": 1, #how reliable is prediction F_x lower value implies more reliable
+                    "Process_Noise": 1, #how reliable is prediction fx lower value implies more reliable
                     'sample_rate': 1,   #how often to update kalman filter. higher number gives smoother (maybe oversmoothed) predictions
                     "do_restrict": True, #"restrict to a proportion prop of the agents being observed"
                     "do_animate": False,#"do animations of agent/wiggle aggregates"
@@ -218,14 +229,16 @@ if __name__ == "__main__":
                     }
     
     srukf_params = {
-            "a":0.1,#alpha between 1 and 1e-4 typically
+            "a":100,#alpha between 1 and 1e-4 typically
             "b":2,#beta set to 2 for gaussian 
             "k":0,#kappa usually 0 for state estimation and 3-dim(state) for parameters
+            "d_rate" : 10,
+
             }
     
     
     sr = srukf_ss(model_params,filter_params,srukf_params)
     sr.main()
-    a,b,a_full = sr.data_parser(True)
-    plots.diagnostic_plots(sr)
+    a,b= sr.data_parser(True)
+    plots.diagnostic_plots(sr,True)
     res = a-b

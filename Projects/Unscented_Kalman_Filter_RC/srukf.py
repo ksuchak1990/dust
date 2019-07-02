@@ -1,7 +1,6 @@
-
-
 import numpy as np
 from choldate import cholupdate,choldowndate
+import multiprocessing
 #"pip install git+git://github.com/jcrudy/choldate.git"
 """
 for cholesky update/downdate.
@@ -12,8 +11,22 @@ but I found this nice package in the meantime.
 class srukf:
     
     def __init__(self,srukf_params,init_x,fx,hx,Q,R):
-        """this needs to:
-            - init x0, S_0,S_v and S_n     
+        """
+        x - state
+        n - state size 
+        P - Initial state covariance. This is generally the only 
+        cholesky decomposition used to get a ballpark initial value.
+        S- UT element of P. 
+        fx - transition function
+        hx - measurement function
+        lam - lambda paramter
+        g - gamma parameter
+        wm/wc - unscented weights for mean and covariances respectively calculated using dimension size 
+        and srukf parameters a,b and k.
+        Q,R -noise structures for fx and hx
+        sqrtQ,sqrtR - similar to P only square rooted once and propagated through S
+        for efficiency
+        xs,Ss - lists for storage
         """
         
         #init initial state
@@ -49,8 +62,17 @@ class srukf:
         self.Ss = []
 
     def Sigmas(self,mean,S):
-        """sigma point calculations based on current mean x and  UT (upper triangular) 
-        decomposition S of covariance P"""
+        """
+        sigma point calculations based on current mean x and  UT (upper triangular) 
+        decomposition S of covariance P
+        !! this should probably be profiled to find the most efficient method as it is 
+        called A LOT. this current method has proven more efficient than equivalent 
+        for loops thus far and any further improvement would be massive.
+        in:
+            some mean and confidence stucutre S
+        out: 
+            sigmas based on above mean and S
+        """
         
      
         sigmas = np.ones((self.n,(2*self.n)+1)).T*mean
@@ -64,14 +86,24 @@ class srukf:
         - calculate sigmas using prior mean and UT element of covariance S
         - predict interim sigmas X for next timestep using transition function Fx
         - predict unscented mean for next timestep
-        - calculate interim S using concatenation of all but first column of Xs
-            and square root of process noise
-        - cholesky update to nudge on unstable 0th row
+        - calculate qr decomposition of concatenated columns of all but the first sigma scaled 
+            by the 1st (not 0th) wc and the square root of process noise (sqrtQ) 
+            to calculate another interim S.
+        - cholesky up(/down)date to nudge interim S on potentially unstable 0th 
+            column of Y. if 0th wc weight +ve update else downdate
         - calculate futher interim sigmas using interim S and unscented mean
+        in:
+            -prior x and S
+            -fx
+            -wm,wc
+        out:
+            -interim x and S
         """
         #calculate NL projection of sigmas
         sigmas = self.Sigmas(self.x,self.S) #calculate current sigmas using state x and UT element S
-        nl_sigmas = np.apply_along_axis(self.fx,0,sigmas)
+        p = multiprocessing.Pool()
+        nl_sigmas = np.vstack(p.map(self.fx,[sigmas[:,j] for j in range(sigmas.shape[1])])).T
+        p.close()
         wnl_sigmas = nl_sigmas*self.wm
             
         xhat = np.sum(wnl_sigmas,axis=1)#unscented mean for predicitons
@@ -99,14 +131,22 @@ class srukf:
         - calculate interim sigmas using Sxx and unscented mean estimate
         - calculate measurement sigmas Y = h(X)
         - calculate unscented mean of Ys
-        - calculate qr decomposition of concatenated columns of all but first Y scaled 
-            by w1c and square root of sensor noise to calculate interim S
-        - cholesky update to nudge interim S on potentially unstable 0th 
-            column of Y
+        - calculate qr decomposition of concatenated columns of all but the first sigma scaled 
+            by the 1st (not 0th) wc and the square root of sensor noise (sqrtR) to calculate another interim S
+        - cholesky up(/down)date to nudge interim S on potentially unstable 0th 
+            column of Y. if 0th wc weight +ve update else downdate
         - calculate sum of scaled cross covariances between Ys and Xs Pxy
-        - calculate kalman gain
+        - calculate kalman gain through double back propagation 
+        (uses moore-penrose pseudo inversion to improve stability in inverting near singular matrix)
         - calculate x update
-        - calculate S update
+        - calculate posterior S by cholesky downdating interim S Sxx on each column of matrix U
+        
+         in:
+            -interim x and S
+            -hx
+            -wm,wc
+        out:
+            -posterior x and S
         """
         sigmas = self.Sigmas(self.x,self.S) #update using Sxx and unscented mean
         nl_sigmas = np.apply_along_axis(self.hx,0,sigmas)
@@ -125,15 +165,17 @@ class srukf:
         if self.wc[0]<0:    
             choldowndate(Syy,u)   
         
-
+        #!! do this with quadratic form may be much quicker
         Pxy =  self.wc[0]*np.outer((sigmas[:,0].T-self.x),(nl_sigmas[:,0].transpose()-yhat))
         for i in range(1,len(self.wc)):
             Pxy += self.wc[i]*np.outer((sigmas[:,i].T-self.x),(nl_sigmas[:,i].transpose()-yhat))
             
-        
-        K = np.matmul(Pxy,np.linalg.inv(np.matmul(Syy,Syy.T)))
-        #K= np.linalg.lstsq(np.matmul(Syy,Syy.T),Pxy.T)[0].T
-        
+        "line 1 is standard matrix inverse. generally slow for large spaces"
+        "lines 2-3 are double back prop avoiding true inversion and much quicker/stable."
+        #K = np.matmul(Pxy,np.linalg.inv(np.matmul(Syy,Syy.T)))
+        K = np.dot(Pxy,np.linalg.pinv(Syy.T))
+        K = np.dot(K,np.linalg.pinv(Syy))
+
         U = np.matmul(K,Syy)
         
         #update xhat

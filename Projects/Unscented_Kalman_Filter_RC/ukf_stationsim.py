@@ -12,32 +12,31 @@ class built into 5 steps
 -Update SP generation
 -Update
 
-SR filter generally the same as regular UKF for efficiency 
-but more numerically stable wrt rounding errors 
-and preserving PSD covariance matrices
+UKF filter using own function rather than filterpys
 
 based on
 citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.80.1421&rep=rep1&type=pdf
 """
 
-
+#import pip packages
 import numpy as np
 from math import floor
 import matplotlib.pyplot as plt
 import datetime
-from copy import deepcopy
-
 import pickle
-import os
-
+from multiprocessing import Pool
+#import local packages
 from StationSim_Wiggle import Model
 from ukf_plots import plots,animations
-from srukf import srukf
-
+from ukf import ukf
+#for dark plots. purely an aesthetic choice.
 plt.style.use("dark_background")
 
-class srukf_ss:
-    def __init__(self,model_params,filter_params,srukf_params):
+class ukf_ss:
+    """
+    UKF for station sim using UKF filter "ukf.py" programmed by RC.
+    """
+    def __init__(self,model_params,filter_params,ukf_params):
         """
         *_params - loads in parameters for the model, station sim filter and general UKF parameters
         base_model - initiate stationsim 
@@ -46,15 +45,15 @@ class srukf_ss:
         sample_rate - how often to update the kalman filter. intigers greater than 1 repeatedly step the station sim forward
         sample_size - how many agents observed if prop is 1 then sample_size is same as pop_total
         index and index 2 - indicate which agents are being observed
-        srukf_histories- placeholder to store ukf trajectories
+        ukf_histories- placeholder to store ukf trajectories
         time1 - initial time used to calculate run time 
         """
         #call params
         self.model_params = model_params #stationsim parameters
         self.filter_params = filter_params # ukf parameters
-        self.srukf_params = srukf_params
+        self.ukf_params = ukf_params
         
-        self.base_model = Model(model_params) #station sim
+        self.base_model = Model(self.model_params) #station sim
 
         """
         calculate how many agents are observed and take a random sample of that
@@ -77,45 +76,31 @@ class srukf_ss:
         self.index2[0::2] = 2*self.index
         self.index2[1::2] = (2*self.index)+1
         
-        self.srukf_histories = []
+        self.ukf_histories = []
    
-        self.time1 = datetime.datetime.now()#timer
+        self.time1 =  datetime.datetime.now()#timer
 
     def fx(self,x,**fx_args):
         """
         Transition function for each agent. where it is predicted to be.
-        For station sim this is essentially gradient * v *dt assuming no collisions
-        with some algebra to get it into cartesian plane.
+        For station sim this is essentially a placeholder step with
+        varying initial locations depending on each sigma point.
         
-        to generalise this to every agent need to find the "ideal move" for each I.E  assume no collisions
-        will make class agent_ideal which essential is the same as station sim class agent but no collisions in move phase
-        
-        New fx here definitely works as intended.
-        I.E predicts lerps from each sigma point rather than using
-        sets of lerps at 1 point (the same thing 5 times)
-        in:
-            x-prior state of base_model before step
-            fx_args - generic kwargs
-        out:
-            prediction of base_model state at next step given prior positions x
-            used to propagate sigmas points
+
         """
-        #!!need to properly test deepcopy vs pickle both here for now. 
-        f = open(f"temp_pickle_model_srukf_{self.time1}","rb")
+        """
+        call placeholder base_model created in main via pickling
+        this is done to essentially rollback the basemodel as stepping 
+        it is non-invertible (afaik).
+        """
+        f = open(f"temp_pickle_model_ukf_{self.time1}","rb")
         model = pickle.load(f)
         f.close()
-        #model = deepcopy(self.base_model)
-        state = model.agents2state()
-        state[self.index2] = x
-        model.state2agents(state = state)    
+        
+        model.state2agents(state = x)    
         model.step()
         state = model.agents2state()
-        return state[self.index2]
-    
-        #model.state2agents(state = x)    
-        #model.step()
-        #state = model.agents2state()
-        #return state
+        return state
    
     def hx(self,state,**hx_args):
         """
@@ -126,64 +111,61 @@ class srukf_ss:
         out: 
             observed subset of full state
         """
-        #state = state[self.index2]
+        state = state[self.index2]
         
         return state
     
-    def init_srukf(self):
-        state = self.base_model.agents2state(self)[self.index2]
-        Q = np.eye(len(state))
+    def init_ukf(self):
+        "initialise ukf with initial state and covariance structures."
+        state = self.base_model.agents2state(self)
+        Q = np.eye(self.pop_total*2)
         R = np.eye(len(self.index2))
-        self.srukf = srukf(srukf_params,state,self.fx,self.hx,Q,R)
-        
-        self.srukf_histories.append(self.srukf.x)
+        P = np.eye(self.pop_total)
+        self.ukf = ukf(ukf_params,state,self.fx,self.hx,P,Q,R)
+        self.ukf_histories.append(self.ukf.x) #
     
     
     def main(self):
         """
         main function for ukf station sim
-        -initiates srukf
-        -predict with srukf
+        -initiates ukf
+        -predict with ukf
         -step true model
-        -update srukf with new model positions
+        -update ukf with new model positions
         -repeat until model ends or max iterations reached
+        
         """
         np.random.seed(seed = 8)#seeding if  wanted else hash it
-        #np.random.seed(seed = 7)#seeding if  wanted else hash it
+        #np.random.seed(seed = 7)# another seed if  wanted else hash it
 
         
-        self.init_srukf() 
+        self.init_ukf() 
         for _ in range(self.number_of_iterations-1):
             if _%100 ==0: #progress bar
                 print(f"iterations: {_}")
                 
 
-            f_name = f"temp_pickle_model_srukf_{self.time1}"
+            f_name = f"temp_pickle_model_ukf_{self.time1}"
             f = open(f_name,"wb")
-            pickle.dump(self.base_model,f,pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self.base_model,f)
             f.close()
             
             
-            
-            self.srukf.predict() #predict where agents will jump
+            self.ukf.predict() #predict where agents will jump
             self.base_model.step() #jump stationsim agents forwards
             
-            #os.remove(f"temp_pickle_model_srukf_{self.time1}")
+
             if self.base_model.time_id%self.sample_rate == 0: #update kalman filter assimilate predictions/measurements
                 
                 state = self.base_model.agents2state() #observed agents states
-                self.srukf.update(z=state[self.index2]) #update UKF
-                self.srukf.x[sr.srukf.x<0]=0
-                x = self.srukf.x
-                if np.sum(np.isnan(x))==x.shape[0] or np.sum(np.abs(x-self.srukf_histories[-1]))>1e3:
-                    print(np.sum(np.abs(x-self.srukf_histories[-1])))
-                    print("linalg error: increasing alpha")
-                    print(" ")
-                    srukf_params["abort"]=True
+                self.ukf.update(z=state[self.index2]) #update UKF
+                self.ukf_histories.append(self.ukf.x) #append histories
+                
+                x = self.ukf.x
+                if np.sum(np.isnan(x))==x.shape[0]:
+                    print("math error. try larger values of alpha else check fx and hx.")
                     break
-                self.srukf_histories.append(self.srukf.x) #append histories
-
-                "debug point placeholder because spyder is dumb and you cant stop at empty lines"
+                ""
             if self.base_model.pop_finished == self.pop_total: #break condition
                 break
         
@@ -206,11 +188,12 @@ class srukf_ss:
         """
         sample_rate = self.sample_rate
 
+
         a2 = {}
         for k,agent in  enumerate(self.base_model.agents):
             a2[k] =  agent.history_loc
         max_iter = max([len(value) for value in a2.values()])
-        b2 = np.vstack(self.srukf_histories)
+        b2 = np.vstack(self.ukf_histories)
         
         a= np.zeros((max_iter,self.pop_total*2))*np.nan
         b= np.zeros((max_iter,b2.shape[1]))*np.nan
@@ -233,13 +216,9 @@ class srukf_ss:
 
 
 if __name__ == "__main__":
-    """
-            a - alpha scaling parameter determining how far apart sigma points are spread. Typically between 1e-4 and 1
-            b - beta scaling paramater incorporates prior knowledge of distribution of state space. b=2 optimal for gaussians
-            k - kappa scaling parameter typically 0 for state space estimates and 3-dim(x) for parameter estimation
-            init_x- initial state space
-    """
-    """
+
+    model_params = {
+            """
             width - corridor width
             height - corridor height
             pop_total -population total
@@ -254,8 +233,7 @@ if __name__ == "__main__":
             wiggle - wiggle distance
             batch_iterations - how many model steps to do as a maximum
             3 do_ bools for saving plotting and animating data. 
-    """
-    model_params = {
+            """
             
             'width': 200,
             'height': 100,
@@ -275,8 +253,8 @@ if __name__ == "__main__":
             'do_plot': False,
             'do_ani': False
             }
-        
-    filter_params = {         
+
+    filter_params = {      
             """
             Sensor_Noise - how reliable are measurements H_x. lower value implies more reliable
             Process_Noise - how reliable is prediction fx lower value implies more reliable
@@ -292,56 +270,42 @@ if __name__ == "__main__":
             do_batch - do batch processing on some pre-recorded truth data.
             """
             
-            "Sensor_Noise":  1, # how reliable are measurements H_x. lower value implies more reliable
-            "Process_Noise": 1, #how reliable is prediction fx lower value implies more reliable
-            'sample_rate': 1,   #how often to update kalman filter. higher number gives smoother (maybe oversmoothed) predictions
-            "do_restrict": True, #"restrict to a proportion prop of the agents being observed"
-            "do_animate": False,#"do animations of agent/wiggle aggregates"
+            "Sensor_Noise":  1, 
+            "Process_Noise": 1, 
+            'sample_rate': 1,
+            "do_restrict": True, 
+            "do_animate": False,
             "do_wiggle_animate": False,
             "do_density_animate":False,
             "do_pair_animate":False,
-            "prop": 0.1,#proportion of agents observed. 1 is all <1/pop_total is none
-            "heatmap_rate": 2,# "after how many updates to record a frame"
+            "prop": 0.5,
+            "heatmap_rate": 2,
             "bin_size":10,
-            "do_batch":False,
-            "plot_unobserved":False
+            "do_batch":False
             }
-    """
+    
+    ukf_params = {
+            """
             a - alpha between 1 and 1e-4 typically determines spread of sigma points.
             b - beta set to 2 for gaussian. determines trust in prior distribution.
             k - kappa usually 0 for state estimation and 3-dim(state) for parameters.
                 not 100% sure what kappa does. think its a bias parameter.
             !! might be worth making an interactive notebook that varies these. for fun
-    """
-    srukf_params = {
-            "a":1e1,
+
+            """
+            "a":1,
             "b":2,
             "k":0,
-            "d_rate" : 10,
-            "abort" : False
+            "d_rate" : 10, #data assimilotion rate every "d_rate model steps recalibrate UKF positions with truth
 
             }
     
-    for i in range(20):
-        srukf_params["abort"]=False
-        sr = srukf_ss(model_params,filter_params,srukf_params)
-        try:   
-            a = srukf_params["a"]
-            print(f"alpha: {a}")
-            sr.main()
-            if not srukf_params["abort"]:
-                actual,preds= sr.data_parser(True)
-                
-                if filter_params["plot_unobserved"]:
-                    distances,t_mean = plots.diagnostic_plots(sr,actual,preds,False,False)
-                distances2,t_mean2 = plots.diagnostic_plots(sr,actual,preds,True,False)
-                break
-    
-        except np.linalg.LinAlgError:
-            print("linalg error: increasing alpha")
-
-        finally:
-            srukf_params["a"]*=10
-      
-        print ("no suitable alpha found")
-        print("math error. try larger values of alpha else check fx and hx.")
+    """run and extract data"""
+    u = ukf_ss(model_params,filter_params,ukf_params)
+    u.main()
+    actual,preds= u.data_parser(True)
+            
+    """plots"""
+    if filter_params["prop"]<1:
+        distances,t_mean = plots.diagnostic_plots(u,actual,preds,False,False)
+    distances2,t_mean2 = plots.diagnostic_plots(u,actual,preds,True,False)

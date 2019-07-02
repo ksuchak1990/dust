@@ -164,154 +164,169 @@ class plots:
         self.ukf = ukf #!!not sure this is necessary but it works so it's not stupid
     
 
-    def heatmap(self):
+    def heatmap(self,a,b):
         #sample_agents = [self.base_model.agents[j] for j in self.index]
         #swap if restricting observed agents
-        sample_agents = self.base_model.agents
-        locs = [agent.location for agent in sample_agents]
-        locs = np.vstack(locs)
+        
         bins = self.filter_params["bin_size"]
         width = self.model_params["width"]
         height = self.model_params["height"]
-
-        f = plt.figure(figsize=(12,8))
-        ax = f.add_subplot(111)
-
-        plt.scatter(locs[:,0],locs[:,1],color="cyan")
-        ax.set_ylim(0,height)
-        ax.set_xlim(0,width)        
-        hist,xb,yb = np.histogram2d(locs[:,0],locs[:,1],
-                                    range = [[0,width],[0,height]],
-                                    bins = [2*bins,bins],density=True)
-        hist *= bins**2
-        hist= hist.T
-        hist = np.flip(hist,axis=0)
-
-        extent = [0,width,0,height]
-        plt.imshow(np.ma.masked_where(hist==0,hist),interpolation="none"
-                   ,cmap = cm.Spectral ,extent=extent
-                   ,norm=DivergingNorm(vmin=1e-10,vcenter=0.1,vmax=1))
-        
-        ticks = np.array([0.001,0.1,0.2,0.5,1.0])
-        cbar = plt.colorbar(fraction=0.046,pad=0.04,shrink=0.71,
-                            ticks = ticks,spacing="proportional")
-        plt.clim(0,1)
-        cbar.set_alpha(1)
-        cbar.draw_all()
+        for j in range(a.shape[0]):
+            locs = a[j,:]
             
-        plt.xlabel("Corridor width")
-        plt.ylabel("Corridor height")
-        cbar.set_label("Agent Density (x100%)") 
-        number = str(self.frame_number).zfill(5)
-        file = f"output/heatmap{number}"
-        f.savefig(file)
-        plt.close()
-        self.frame_number+=1
-        
-    
-    def wiggle_heatmap(self):
-            #sample_agents = [self.base_model.agents[j] for j in self.index]
-            #swap if restricting observed wiggles
-            sample_agents = self.base_model.agents
-            wiggles = np.array([agent.wiggle for agent in sample_agents])
-            #are you having a wiggle m8
-            index = np.where(wiggles==1)
-            non_index = np.where(wiggles==0)
-            #sort locations
-            locs = [agent.location for agent in sample_agents]
-            locs = np.vstack(locs)
-            non_locs = locs[non_index,:][0,:,:]
-            locs = locs[index,:][0,:,:]
-            #initiate figure /axes
             f = plt.figure(figsize=(12,8))
             ax = f.add_subplot(111)
-            bins = self.filter_params["bin_size"]
-            width = self.model_params["width"]
-            height = self.model_params["height"]
-
-            #plot non-wigglers and set plot size
-            plt.scatter(non_locs[:,0],non_locs[:,1],color="cyan")
+    
+            plt.scatter(locs[:,0],locs[:,1],color="cyan")
             ax.set_ylim(0,height)
-            ax.set_xlim(0,width)
-            cmap = cm.Spectral
-
-            #check for any wigglers and plot the 2dhist 
-            if np.sum(wiggles)!=0:
-                plt.scatter(locs[:,0],locs[:,1],color="magenta")
-                hist,xb,yb = np.histogram2d(locs[:,0],locs[:,1],
-                                            range = [[0,width],[0,height]],
-                                            bins = [2*bins,bins],density=True)  #!! some formula for bins to make even binxbin squares??  
-                hist *= bins**2
-                hist= hist.T
-                hist = np.flip(hist,axis=0)
-                self.wiggle_densities[self.wiggle_frame_number] = hist
-                
-                extent = [0,width,0,height]
-                im=plt.imshow(np.ma.masked_where(hist==0,hist)
-                           ,cmap = cmap,extent=extent,
-                           norm=DivergingNorm(vmin=1e-10,vcenter=0.11,vmax=1))
-                
-            #if no wiggles plot a "ghost histogram" to maintain frame structure  
-            else:
-                #ghost histogram with one entry and (1,1)
-                hist,xb,yb = np.histogram2d(np.array([1]),np.array([1]),
-                                            range = [[0,width],[0,height]],
-                                            bins = [bins,bins],density=True)   
-               
-                extent = [0,width,0,height]
-                #plot ghost hist with no opacity (alpha=0) to make it invisible
-                im=plt.imshow(np.ma.masked_where(hist==0,hist),interpolation="none"
-                           ,cmap = cm.Spectral ,extent=extent,alpha=0
-                           ,norm=DivergingNorm(vmin=1e-10,vcenter=0.1,vmax=1))
+            ax.set_xlim(0,width)        
+            hist,xb,yb = np.histogram2d(locs[:,0],locs[:,1],
+                                        range = [[0,width],[0,height]],
+                                        bins = [2*bins,bins],density=True)
+            hist *= bins**2
+            hist= hist.T
+            hist = np.flip(hist,axis=0)
+    
+            extent = [0,width,0,height]
+            plt.imshow(np.ma.masked_where(hist==0,hist),interpolation="none"
+                       ,cmap = cm.Spectral ,extent=extent
+                       ,norm=DivergingNorm(vmin=1e-10,vcenter=0.1,vmax=1))
             
-            #colourbar and various plot fluff
-            ticks = np.array([0.001,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
-            #!! numbers adjusted by trial and error for 200x100 field. 
-            #should probably generalise this and the bin structure at some point
-            cbar = plt.colorbar(im,fraction=0.046,pad=0.04,shrink=0.71,
+            ticks = np.array([0.001,0.1,0.2,0.5,1.0])
+            cbar = plt.colorbar(fraction=0.046,pad=0.04,shrink=0.71,
                                 ticks = ticks,spacing="proportional")
             plt.clim(0,1)
             cbar.set_alpha(1)
             cbar.draw_all()
-            
+                
             plt.xlabel("Corridor width")
             plt.ylabel("Corridor height")
-            cbar.set_label("Wiggle Density (x100%)")
-            
-            number = str(self.wiggle_frame_number).zfill(5)
-            file = f"output_wiggle/wiggle{number}"
+            cbar.set_label("Agent Density (x100%)") 
+            number = str(self.frame_number).zfill(5)
+            file = f"output/heatmap{number}"
             f.savefig(file)
             plt.close()
-            self.wiggle_frame_number+=1
+            self.frame_number+=1
         
     
-    def diagnostic_plots(self,observed):
-        a ,b = self.data_parser(False)
+    def wiggle_heatmap(self,a,b):
+        """
+        old dont use
+        """     
+        bins = self.filter_params["bin_size"]
+        width = self.model_params["width"]
+        height = self.model_params["height"]
+        
+            #sample_agents = [self.base_model.agents[j] for j in self.index]
+            #swap if restricting observed wiggles
+        sample_agents = self.base_model.agents
+        wiggles = np.array([agent.wiggle for agent in sample_agents])
+        #are you having a wiggle m8
+        index = np.where(wiggles==1)
+        non_index = np.where(wiggles==0)
+        #sort locations
+        locs = [agent.location for agent in sample_agents]
+        locs = np.vstack(locs)
+        non_locs = locs[non_index,:][0,:,:]
+        locs = locs[index,:][0,:,:]
+        #initiate figure /axes
+        f = plt.figure(figsize=(12,8))
+        ax = f.add_subplot(111)
+        bins = self.filter_params["bin_size"]
+        width = self.model_params["width"]
+        height = self.model_params["height"]
+
+        #plot non-wigglers and set plot size
+        plt.scatter(non_locs[:,0],non_locs[:,1],color="cyan")
+        ax.set_ylim(0,height)
+        ax.set_xlim(0,width)
+        cmap = cm.Spectral
+
+        #check for any wigglers and plot the 2dhist 
+        if np.sum(wiggles)!=0:
+            plt.scatter(locs[:,0],locs[:,1],color="magenta")
+            hist,xb,yb = np.histogram2d(locs[:,0],locs[:,1],
+                                        range = [[0,width],[0,height]],
+                                        bins = [2*bins,bins],density=True)  #!! some formula for bins to make even binxbin squares??  
+            hist *= bins**2
+            hist= hist.T
+            hist = np.flip(hist,axis=0)
+            self.wiggle_densities[self.wiggle_frame_number] = hist
+            
+            extent = [0,width,0,height]
+            im=plt.imshow(np.ma.masked_where(hist==0,hist)
+                       ,cmap = cmap,extent=extent,
+                       norm=DivergingNorm(vmin=1e-10,vcenter=0.11,vmax=1))
+            
+        #if no wiggles plot a "ghost histogram" to maintain frame structure  
+        else:
+            #ghost histogram with one entry and (1,1)
+            hist,xb,yb = np.histogram2d(np.array([1]),np.array([1]),
+                                        range = [[0,width],[0,height]],
+                                        bins = [bins,bins],density=True)   
+           
+            extent = [0,width,0,height]
+            #plot ghost hist with no opacity (alpha=0) to make it invisible
+            im=plt.imshow(np.ma.masked_where(hist==0,hist),interpolation="none"
+                       ,cmap = cm.Spectral ,extent=extent,alpha=0
+                       ,norm=DivergingNorm(vmin=1e-10,vcenter=0.1,vmax=1))
+        
+        #colourbar and various plot fluff
+        ticks = np.array([0.001,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
+        #!! numbers adjusted by trial and error for 200x100 field. 
+        #should probably generalise this and the bin structure at some point
+        cbar = plt.colorbar(im,fraction=0.046,pad=0.04,shrink=0.71,
+                            ticks = ticks,spacing="proportional")
+        plt.clim(0,1)
+        cbar.set_alpha(1)
+        cbar.draw_all()
+        
+        plt.xlabel("Corridor width")
+        plt.ylabel("Corridor height")
+        cbar.set_label("Wiggle Density (x100%)")
+        
+        number = str(self.wiggle_frame_number).zfill(5)
+        file = f"output_wiggle/wiggle{number}"
+        f.savefig(file)
+        plt.close()
+        self.wiggle_frame_number+=1
+        
+    
+    def diagnostic_plots(self,a,b,observed,save):
+        """
+        self - UKf class for various information
+        
+        a-observed agents
+        
+        b-UKF predictions of a
+        
+        observed- bool for plotting observed or unobserved agents
+        if True observed else unobserved
+        
+        save- bool for saving plots in current directory. saves if true
+        
+        
+        """
         if observed:
                 a = a[:,self.index2]
-                b = b[:,self.index2]
+                if len(self.index2)<b.shape[1]:
+                    b = b[:,self.index2]
+                plot_range = self.model_params["pop_total"]*(self.filter_params["prop"])
+
         else:      
                 mask = np.ones(a.shape[1])
                 mask[self.index2]=False
                 a = a[:,np.where(mask!=0)][:,0,:]
                 b = b[:,np.where(mask!=0)][:,0,:]
-        
-        if self.filter_params["do_batch"]:
-            pop = self.model_params["pop_total"]
-            a = np.load(f"ACTUAL_TRACKS_{pop}_0.npy")
-            
-        if observed:
-            plot_range = self.model_params["pop_total"]*(self.filter_params["prop"])
-        else:
-            plot_range = self.model_params["pop_total"]*(1-self.filter_params["prop"])
+                plot_range = self.model_params["pop_total"]*(1-self.filter_params["prop"])
 
             
-        plt.figure(figsize=(12,8))
+        f=plt.figure(figsize=(12,8))
         for j in range(int(plot_range)):
             plt.plot(a[:,(2*j)],a[:,(2*j)+1])    
             plt.title("True Positions")
 
-        plt.figure(figsize=(12,8))
+        g = plt.figure(figsize=(12,8))
         for j in range(int(plot_range)):
             plt.plot(b[::self.sample_rate,2*j],b[::self.sample_rate,(2*j)+1])    
             plt.title("KF predictions")
@@ -321,7 +336,7 @@ class plots:
             
         """MAE metric. 
         finds mean average euclidean error at each time step and per each agent"""
-        c = {}
+        c = np.ones((a.shape[0],int(a.shape[1]/2)))*np.nan
         c_means = []
         
        
@@ -331,22 +346,18 @@ class plots:
             b_2 =   b[:,(2*i):(2*i)+2] 
     
 
-            c[i] = []
             for k in range(floor(np.min([a.shape[0],b.shape[0]]))):
-                if np.any(np.isnan(a_2[k,:])) or np.any(np.isnan(b_2[k,:])):
-                    c[i].append(np.nan)
-                else:                       
-                    c[i].append(dist.euclidean(a_2[k,:],b_2[k,:]))
+                if not(np.any(np.isnan(a_2[k,:])) or np.any(np.isnan(b_2[k,:]))):                
+                    c[k,i]=dist.euclidean(a_2[k,:],b_2[k,:])
                 
-            c_means.append(np.nanmean(c[i]))
+            c_means.append(np.nanmean(c[i,:]))
         
-        c = np.vstack(list(c.values()))
-        time_means = np.nanmean(c,axis=0)
-        plt.figure(figsize=(12,8))
+        agent_means = np.nanmean(c,axis=0)
+        time_means = np.nanmean(c,axis=1)
+        h = plt.figure(figsize=(12,8))
         plt.plot(time_means[::self.sample_rate])
         plt.axhline(y=0,color="r")
         plt.title("MAE over time")
-    
             
         """find agent with highest MAE and plot it.
         mainly done to check something odd isnt happening"""
@@ -355,19 +366,32 @@ class plots:
         a1 = a[:,(2*index):(2*index)+2]
         b1 = b[:,(2*index):(2*index)+2]
         
-        plt.figure(figsize=(12,8))
+        i = plt.figure(figsize=(12,8))
         plt.plot(a1[:,0],a1[:,1],label= "True Path")
         plt.plot(b1[::self.sample_rate,0],b1[::self.sample_rate,1],label = "KF Prediction")
         plt.legend()
         plt.title("Worst agent")
+        
+        j = plt.figure(figsize=(12,8))
+        plt.hist(agent_means)
+        plt.legend()
+        plt.title("Mean Error per agent histogram")
                   
-
-        return c_means,time_means
+        if save:
+            if observed:
+                s = "observed"
+            else:
+                s = "unobserved"
+            f.savefig(f"{s}_actual")
+            g.savefig(f"{s}_kf")
+            h.savefig(f"{s}_mae")
+            i.savefig(f"{s}_worst")
+            j.savefig(f"{s}_agent_hist")
+        return c,time_means
     
             
-    def density_frames(self):
+    def density_frames(self,a,b):
         "snapshots of densities"
-        a,b,a_full = self.data_parser(False)
         bins = self.filter_params["bin_size"]
         width = self.model_params["width"]
         height = self.model_params["height"]
@@ -448,10 +472,9 @@ class plots:
             plt.close()
        
         
-    def pair_frames(self):
+    def pair_frames(self,a,b):
         "paired side by side preds/truth"
-        _,b,a_full = self.data_parser(False)
-        a = a_full
+
         a = a[::self.filter_params["sample_rate"],self.index2]
 
         for i in range(b.shape[0]):

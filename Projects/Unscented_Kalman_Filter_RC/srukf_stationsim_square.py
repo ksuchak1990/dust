@@ -101,21 +101,21 @@ class srukf_ss:
             used to propagate sigmas points
         """
         #!!need to properly test deepcopy vs pickle both here for now. 
-        #f = open(f"temp_pickle_model_srukf_{self.time1}","rb")
-        #model = pickle.load(f)
-        #f.close()
-        model = deepcopy(self.base_model)
+        f = open(f"temp_pickle_model_srukf_{self.time1}","rb")
+        model = pickle.load(f)
+        f.close()
         #model = deepcopy(self.base_model)
-        #state = model.agents2state()
-        #model.state2agents(state = state)    
-        #model.step()
-        #state = model.agents2state()
-        #return state[self.index2]
-    
-        model.state2agents(state = x)    
+        state = model.agents2state()
+        state[self.index2] = x
+        model.state2agents(state = state)    
         model.step()
         state = model.agents2state()
-        return state
+        return state[self.index2]
+    
+        #model.state2agents(state = x)    
+        #model.step()
+        #state = model.agents2state()
+        #return state
    
     def hx(self,state,**hx_args):
         """
@@ -128,10 +128,10 @@ class srukf_ss:
         """
         #state = state[self.index2]
         
-        return state[self.index2]
+        return state
     
     def init_srukf(self):
-        state = self.base_model.agents2state(self)
+        state = self.base_model.agents2state(self)[self.index2]
         Q = np.eye(len(state))
         R = np.eye(len(self.index2))
         self.srukf = srukf(srukf_params,state,self.fx,self.hx,Q,R)
@@ -158,10 +158,10 @@ class srukf_ss:
                 print(f"iterations: {_}")
                 
 
-            #f_name = f"temp_pickle_model_srukf_{self.time1}"
-            #f = open(f_name,"wb")
-            #pickle.dump(self.base_model,f,pickle.HIGHEST_PROTOCOL)
-            #f.close()
+            f_name = f"temp_pickle_model_srukf_{self.time1}"
+            f = open(f_name,"wb")
+            pickle.dump(self.base_model,f,pickle.HIGHEST_PROTOCOL)
+            f.close()
             
             
             
@@ -300,7 +300,7 @@ if __name__ == "__main__":
             "do_wiggle_animate": False,
             "do_density_animate":False,
             "do_pair_animate":False,
-            "prop": 1,#proportion of agents observed. 1 is all <1/pop_total is none
+            "prop": 0.1,#proportion of agents observed. 1 is all <1/pop_total is none
             "heatmap_rate": 2,# "after how many updates to record a frame"
             "bin_size":10,
             "do_batch":False,
@@ -314,27 +314,26 @@ if __name__ == "__main__":
             !! might be worth making an interactive notebook that varies these. for fun
     """
     srukf_params = {
-            "a":0.1,
+            "a":1e0,
             "b":2,
             "k":0,
             "d_rate" : 10,
             "abort" : False
 
             }
-    alphas= [1,2,5,10,15,25,50,100,1000]
     
-    for i in range(len(alphas)):
+    for i in range(20):
         srukf_params["abort"]=False
         sr = srukf_ss(model_params,filter_params,srukf_params)
         try:   
-            srukf_params["a"]=alphas[i]
-            print(f"alpha: {alphas[i]}")
+            a = srukf_params["a"]
+            print(f"alpha: {a}")
             sr.main()
             if not srukf_params["abort"]:
                 actual,preds= sr.data_parser(True)
                 
-                if filter_params["plot_unobserved"] or filter_params["prop"]<1:
-                    distances,t_mean = plots.diagnostic_plots(sr,actual,preds,False,False)
+                #if filter_params["plot_unobserved"]:
+                #    distances,t_mean = plots.diagnostic_plots(sr,actual,preds,False,False)
                 distances2,t_mean2 = plots.diagnostic_plots(sr,actual,preds,True,False)
                 break
     
@@ -343,6 +342,6 @@ if __name__ == "__main__":
 
         finally:
             srukf_params["a"]*=10
-    if srukf_params["abort"]: #final check for everything failed
+      
         print ("no suitable alpha found")
         print("math error. try larger values of alpha else check fx and hx.")

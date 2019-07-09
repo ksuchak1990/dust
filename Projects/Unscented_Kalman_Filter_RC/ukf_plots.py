@@ -6,7 +6,6 @@ import imageio
 from scipy.spatial import distance as dist
 from math import floor
 import os
-from matplotlib.lines import Line2D
 
 """
 various plot scripts and their dependencies
@@ -337,7 +336,6 @@ class plots:
         """MAE metric. 
         finds mean average euclidean error at each time step and per each agent"""
         c = np.ones((a.shape[0],int(a.shape[1]/2)))*np.nan
-        c_means = []
         
        
         
@@ -349,9 +347,7 @@ class plots:
             for k in range(floor(np.min([a.shape[0],b.shape[0]]))):
                 if not(np.any(np.isnan(a_2[k,:])) or np.any(np.isnan(b_2[k,:]))):                
                     c[k,i]=dist.euclidean(a_2[k,:],b_2[k,:])
-                
-            c_means.append(np.nanmean(c[i,:]))
-        
+                        
         agent_means = np.nanmean(c,axis=0)
         time_means = np.nanmean(c,axis=1)
         h = plt.figure(figsize=(12,8))
@@ -361,17 +357,18 @@ class plots:
             
         """find agent with highest MAE and plot it.
         mainly done to check something odd isnt happening"""
-        index = np.where(c_means == np.nanmax(c_means))[0][0]
-        print(index)
-        a1 = a[:,(2*index):(2*index)+2]
-        b1 = b[:,(2*index):(2*index)+2]
-        
-        i = plt.figure(figsize=(12,8))
-        plt.plot(a1[:,0],a1[:,1],label= "True Path")
-        plt.plot(b1[::self.sample_rate,0],b1[::self.sample_rate,1],label = "KF Prediction")
-        plt.legend()
-        plt.title("Worst agent")
-        
+        if len(agent_means)>1:
+            index = np.where(agent_means == np.nanmax(agent_means))[0][0]
+            print(index)
+            a1 = a[:,(2*index):(2*index)+2]
+            b1 = b[:,(2*index):(2*index)+2]
+            
+            i = plt.figure(figsize=(12,8))
+            plt.plot(a1[:,0],a1[:,1],label= "True Path")
+            plt.plot(b1[::self.sample_rate,0],b1[::self.sample_rate,1],label = "KF Prediction")
+            plt.legend()
+            plt.title("Worst agent")
+            
         j = plt.figure(figsize=(12,8))
         plt.hist(agent_means)
         plt.legend()
@@ -385,7 +382,8 @@ class plots:
             f.savefig(f"{s}_actual")
             g.savefig(f"{s}_kf")
             h.savefig(f"{s}_mae")
-            i.savefig(f"{s}_worst")
+            if len(agent_means)>1:
+                i.savefig(f"{s}_worst")
             j.savefig(f"{s}_agent_hist")
         return c,time_means
     

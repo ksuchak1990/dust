@@ -99,11 +99,13 @@ class srukf:
         out:
             -interim x and S
         """
+        "nl_sigmas calculated using either apply along axis or multithreading"
         #calculate NL projection of sigmas
         sigmas = self.Sigmas(self.x,self.S) #calculate current sigmas using state x and UT element S
-        p = multiprocessing.Pool()
-        nl_sigmas = np.vstack(p.map(self.fx,[sigmas[:,j] for j in range(sigmas.shape[1])])).T
-        p.close()
+        nl_sigmas = np.apply_along_axis(self.fx,0,sigmas)
+        #p = multiprocessing.Pool()
+        #nl_sigmas = np.vstack(p.map(self.fx,[sigmas[:,j] for j in range(sigmas.shape[1])])).T
+        #p.close()
         wnl_sigmas = nl_sigmas*self.wm
             
         xhat = np.sum(wnl_sigmas,axis=1)#unscented mean for predicitons
@@ -112,9 +114,18 @@ class srukf:
         """
         a qr decompositions of the compound matrix contanining the weighted predicted sigmas points
         and the matrix square root of the additive process noise.
+
+        the qr decomposition is wierdly worded in the reference paper here and 
+        i have written this to follow it as to avoid confusion mainly with myself.
+        in particular np.linalg.qr solves for a different qr decomposition form
+        A^T = QR (as opposed to A=QR). this gives R as a pseudo UT mxn (m>n)** rectangular matrix.
+        from this only bottom n rows are take as an actual UT matrix used as an interim S
+        ** m sigmas points, n state space dimension
         """
+        
         Pxx =np.vstack([np.sqrt(self.wc[1])*(nl_sigmas[:,1:].T-xhat),self.sqrtQ])
         Sxx = np.linalg.qr(Pxx,mode="r")
+        Sxx = Sxx[Sxx.shape[0]-len(self.x):,:]
         "up/downdating as necessary depending on sign of first covariance weight"
         u =  np.sqrt(np.sqrt(np.abs(self.wc[0])))*(nl_sigmas[:,0]-xhat)
         if self.wc[0]>0:    
@@ -156,30 +167,40 @@ class srukf:
         """
         a qr decompositions of the compound matrix contanining the weighted measurement sigmas points
         and the matrix square root of the additive sensor noise.
+        
+        same wierd formatting as Sxx above.
         """
-        Pyy =np.vstack([np.sqrt(self.wc[1])*(nl_sigmas[:,1:].T-yhat),self.sqrtR]).T
-        Syy = np.linalg.qr(Pyy,mode="r")
+        Pyy =np.vstack([np.sqrt(self.wc[1])*(nl_sigmas[:,1:].T-yhat),self.sqrtR])
+        Syy = np.linalg.qr(Pyy,mode='r')
+        Syy = Syy[Syy.shape[0]-len(z):,:]
+
         u =  np.sqrt(np.sqrt(np.abs(self.wc[0])))*(nl_sigmas[:,0]-yhat)
+        #fourth root squares back to square root for outer product uu.T
+        
         if self.wc[0]>0:    
             cholupdate(Syy,u)
         if self.wc[0]<0:    
             choldowndate(Syy,u)   
         
         #!! do this with quadratic form may be much quicker
-        Pxy =  self.wc[0]*np.outer((sigmas[:,0].T-self.x),(nl_sigmas[:,0].transpose()-yhat))
+        Pxy =  self.wc[0]*np.outer((sigmas[:,0].T-self.x),(nl_sigmas[:,0].T-yhat))
         for i in range(1,len(self.wc)):
-            Pxy += self.wc[i]*np.outer((sigmas[:,i].T-self.x),(nl_sigmas[:,i].transpose()-yhat))
+            Pxy += self.wc[i]*np.outer((sigmas[:,i].T-self.x),(nl_sigmas[:,i].T-yhat))
             
         "line 1 is standard matrix inverse. generally slow for large spaces"
         "lines 2-3 are double back prop avoiding true inversion and much quicker/stable."
         #K = np.matmul(Pxy,np.linalg.inv(np.matmul(Syy,Syy.T)))
-        K = np.dot(Pxy,np.linalg.pinv(Syy.T))
-        K = np.dot(K,np.linalg.pinv(Syy))
+        #K = np.dot(Pxy,np.linalg.pinv(Syy.T))
+        #K = np.dot(K,np.linalg.pinv(Syy))
+        
+        #double back prop
+        K = np.linalg.lstsq(Syy,Pxy.T,rcond=1e-8)[0].T
+        K = np.linalg.lstsq(Syy.T,K.T,rcond=1e-8)[0].T
 
         U = np.matmul(K,Syy)
         
         #update xhat
-        self.x += np.matmul(K,(z-yhat))
+        self.x =self.x + np.matmul(K,(z-yhat))
         
         "U is a matrix (not a vector) and so requires dim(U) updates of Sxx using each column of U as a 1 step cholup/down/date as if it were a vector"
         Sxx = self.S

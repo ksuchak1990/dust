@@ -259,7 +259,7 @@ if __name__ == "__main__":
             
             'width': 200,
             'height': 100,
-            'pop_total': 10,
+            'pop_total': 20,
             'entrances': 3,
             'entrance_space': 2,
             'entrance_speed': 1,
@@ -300,7 +300,7 @@ if __name__ == "__main__":
             "do_wiggle_animate": False,
             "do_density_animate":False,
             "do_pair_animate":False,
-            "prop": 1,#proportion of agents observed. 1 is all <1/pop_total is none
+            "prop": 0.9,#proportion of agents observed. 1 is all <1/pop_total is none
             "heatmap_rate": 2,# "after how many updates to record a frame"
             "bin_size":10,
             "do_batch":False,

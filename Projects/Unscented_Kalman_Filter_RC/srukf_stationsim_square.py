@@ -101,10 +101,10 @@ class srukf_ss:
             used to propagate sigmas points
         """
         #!!need to properly test deepcopy vs pickle both here for now. 
-        f = open(f"temp_pickle_model_srukf_{self.time1}","rb")
-        model = pickle.load(f)
-        f.close()
-        #model = deepcopy(self.base_model)
+        #f = open(f"temp_pickle_model_srukf_{self.time1}","rb")
+        # model = pickle.load(f)
+        #f.close()
+        model = deepcopy(self.base_model)
         state = model.agents2state()
         state[self.index2] = x
         model.state2agents(state = state)    
@@ -158,10 +158,10 @@ class srukf_ss:
                 print(f"iterations: {_}")
                 
 
-            f_name = f"temp_pickle_model_srukf_{self.time1}"
-            f = open(f_name,"wb")
-            pickle.dump(self.base_model,f,pickle.HIGHEST_PROTOCOL)
-            f.close()
+            #f_name = f"temp_pickle_model_srukf_{self.time1}"
+            #f = open(f_name,"wb")
+            #pickle.dump(self.base_model,f,pickle.HIGHEST_PROTOCOL)
+            #f.close()
             
             
             

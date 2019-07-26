@@ -216,9 +216,7 @@ class ukf_ss:
 
 
 if __name__ == "__main__":
-
-    model_params = {
-            """
+        """
             width - corridor width
             height - corridor height
             pop_total -population total
@@ -234,10 +232,12 @@ if __name__ == "__main__":
             batch_iterations - how many model steps to do as a maximum
             3 do_ bools for saving plotting and animating data. 
             """
+    model_params = {
+    
             
             'width': 200,
             'height': 100,
-            'pop_total': 10,
+            'pop_total': 50,
             'entrances': 3,
             'entrance_space': 2,
             'entrance_speed': 1,
@@ -253,9 +253,7 @@ if __name__ == "__main__":
             'do_plot': False,
             'do_ani': False
             }
-
-    filter_params = {      
-            """
+ """
             Sensor_Noise - how reliable are measurements H_x. lower value implies more reliable
             Process_Noise - how reliable is prediction fx lower value implies more reliable
             sample_rate - how often to update kalman filter. higher number gives smoother predictions
@@ -270,6 +268,8 @@ if __name__ == "__main__":
             do_batch - do batch processing on some pre-recorded truth data.
             """
             
+    filter_params = {      
+           
             "Sensor_Noise":  1, 
             "Process_Noise": 1, 
             'sample_rate': 1,
@@ -278,14 +278,12 @@ if __name__ == "__main__":
             "do_wiggle_animate": False,
             "do_density_animate":False,
             "do_pair_animate":False,
-            "prop": 0.5,
+            "prop": 0.1,
             "heatmap_rate": 2,
             "bin_size":10,
             "do_batch":False
             }
-    
-    ukf_params = {
-            """
+    """
             a - alpha between 1 and 1e-4 typically determines spread of sigma points.
             b - beta set to 2 for gaussian. determines trust in prior distribution.
             k - kappa usually 0 for state estimation and 3-dim(state) for parameters.
@@ -293,6 +291,8 @@ if __name__ == "__main__":
             !! might be worth making an interactive notebook that varies these. for fun
 
             """
+    ukf_params = {
+            
             "a":1,
             "b":2,
             "k":0,
